@@ -8,6 +8,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0a1930">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<script>(function(){try{var t=localStorage.getItem('clima_tema')||'auto';var claro=t==='light'||(t==='auto'&&matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.setAttribute('data-theme',claro?'light':'dark');}catch(e){}})();</script>
 <style>
   :root{
     --bg:#0a1930;--bg2:#0e2340;--bg3:#163256;--card:#102743;
@@ -18,6 +19,12 @@
     --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     --mono:'SF Mono','Fira Code',monospace;
     --sab:env(safe-area-inset-bottom,0px);
+  }
+  :root[data-theme="light"]{
+    --bg:#f2f6fb;--bg2:#ffffff;--bg3:#e9f0f9;--card:#ffffff;
+    --text:#0c1d33;--text2:#3d5670;--text3:#7387a3;
+    --border:#dbe5f0;
+    --shadow:0 2px 16px rgba(30,50,90,.12);
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   html,body{overscroll-behavior-y:contain}
@@ -170,6 +177,7 @@
 <div class="page active" id="page-home">
   <div class="header">
     <div style="flex:1"><div class="header-title">🌤️ Clima</div><div class="header-sub" id="home-lugar">Obteniendo tu ubicación...</div></div>
+    <button class="btn-icon" id="btn-tema" onclick="toggleTema()">🌙</button>
     <button class="btn-icon" onclick="abrirModalDespertador()">⏰</button>
     <button class="btn-icon" onclick="abrirModalLugar()">📍</button>
     <button class="btn-icon" onclick="actualizarClima()">🔄</button>
@@ -313,6 +321,23 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 let _toastT;
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>el.classList.remove('show'),2600); }
+// ── tema claro/oscuro: por defecto sigue al sistema, pero se puede forzar y queda guardado ──
+function _sistemaPrefiereClaro(){ return typeof matchMedia!=='undefined' && matchMedia('(prefers-color-scheme: light)').matches; }
+function aplicarTema(){
+  const t=localStorage.getItem('clima_tema')||'auto';
+  const esClaro = t==='light' || (t==='auto' && _sistemaPrefiereClaro());
+  document.documentElement.setAttribute('data-theme', esClaro?'light':'dark');
+  const btn=document.getElementById('btn-tema');
+  if(btn) btn.textContent = esClaro ? '🌙' : '☀️';
+  const meta=document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', esClaro?'#f2f6fb':'#0a1930');
+}
+function toggleTema(){
+  const t=localStorage.getItem('clima_tema')||'auto';
+  const esClaroActual = t==='light' || (t==='auto' && _sistemaPrefiereClaro());
+  localStorage.setItem('clima_tema', esClaroActual ? 'dark' : 'light');
+  aplicarTema();
+}
 function fechaHoy(){ const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0'); }
 function fmtHora(iso){ const d=new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 function fmtDiaSemana(iso){ const dias=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']; return dias[new Date(iso+'T12:00:00').getDay()]; }
@@ -593,20 +618,61 @@ function _dibujarSol(ctx, ancho, alto, t){
   ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
   ctx.restore();
 }
+// fase lunar real: dias desde una luna nueva de referencia conocida, sobre el ciclo sinodico real (~29.53 dias)
+function _faseLunar(fecha){
+  const sinodico=29.53058867;
+  const nuevaRef=Date.UTC(2000,0,6,18,14);
+  const dias=(fecha.getTime()-nuevaRef)/86400000;
+  let fase=(dias%sinodico)/sinodico;
+  if(fase<0) fase+=1;
+  return fase; // 0=nueva,0.25=creciente,0.5=llena,0.75=menguante
+}
 function _dibujarLuna(ctx, ancho, alto){
   const cx=ancho*0.78, cy=alto*0.20, r=Math.min(ancho,alto)*0.085;
+  const fase=_faseLunar(new Date());
   ctx.save();
   const glow=ctx.createRadialGradient(cx,cy,0,cx,cy,r*2.2);
   glow.addColorStop(0,'rgba(255,255,255,.35)'); glow.addColorStop(1,'rgba(255,255,255,0)');
   ctx.fillStyle=glow;
   ctx.beginPath(); ctx.arc(cx,cy,r*2.2,0,Math.PI*2); ctx.fill();
-  const nucleo=ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,0,cx,cy,r);
-  nucleo.addColorStop(0,'#ffffff'); nucleo.addColorStop(0.7,'#c9d3e0'); nucleo.addColorStop(1,'#aab6c9');
-  ctx.fillStyle=nucleo;
-  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='rgba(160,170,190,.35)';
-  ctx.beginPath(); ctx.arc(cx-r*0.3,cy+r*0.2,r*0.18,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx+r*0.25,cy-r*0.15,r*0.12,0,Math.PI*2); ctx.fill();
+
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+  ctx.fillStyle='#3a4460';
+  ctx.fillRect(cx-r-1, cy-r-1, r*2+2, r*2+2);
+
+  const claroGrad=ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,0,cx,cy,r);
+  claroGrad.addColorStop(0,'#ffffff'); claroGrad.addColorStop(0.7,'#c9d3e0'); claroGrad.addColorStop(1,'#aab6c9');
+
+  const creciente=fase<0.5;
+  const p=creciente ? (fase/0.5) : ((1-fase)/0.5); // 0 (nueva) .. 1 (llena), dentro de esta mitad del ciclo
+
+  ctx.save();
+  ctx.beginPath();
+  if(creciente) ctx.rect(cx, cy-r-1, r+1, r*2+2); else ctx.rect(cx-r-1, cy-r-1, r+1, r*2+2);
+  ctx.clip();
+  ctx.fillStyle=claroGrad;
+  ctx.fillRect(cx-r-1, cy-r-1, r*2+2, r*2+2);
+  ctx.restore();
+
+  if(p<0.5){
+    ctx.save();
+    ctx.beginPath();
+    if(creciente) ctx.rect(cx, cy-r-1, r+1, r*2+2); else ctx.rect(cx-r-1, cy-r-1, r+1, r*2+2);
+    ctx.clip();
+    ctx.fillStyle='#3a4460';
+    const rx=r*(1-p*2);
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx,r,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  } else {
+    ctx.save();
+    ctx.beginPath();
+    if(creciente) ctx.rect(cx-r-1, cy-r-1, r+1, r*2+2); else ctx.rect(cx, cy-r-1, r+1, r*2+2);
+    ctx.clip();
+    ctx.fillStyle=claroGrad;
+    const rx=r*((p-0.5)*2);
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx,r,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
   ctx.restore();
 }
 function _dibujarLluvia(ctx, ancho, alto, vientoDir, groundY){
@@ -906,6 +972,14 @@ function iniciarRelampagos(){
 }
 function detenerRelampagos(){ if(_relampagoInterval){ clearInterval(_relampagoInterval); _relampagoInterval=null; } }
 
+function _esAmanecerOAtardecer(){
+  if(!CLIMA_ACTUAL || !CLIMA_ACTUAL.daily) return false;
+  const sunrise=CLIMA_ACTUAL.daily.sunrise && CLIMA_ACTUAL.daily.sunrise[0];
+  const sunset=CLIMA_ACTUAL.daily.sunset && CLIMA_ACTUAL.daily.sunset[0];
+  const ahora=Date.now(), margen=45*60000;
+  const cerca=iso=>{ if(!iso) return false; return Math.abs(ahora-new Date(iso).getTime())<=margen; };
+  return cerca(sunrise) || cerca(sunset);
+}
 function aplicarEscena(){
   if(!CLIMA_ACTUAL || !CLIMA_ACTUAL.current) return;
   const c=CLIMA_ACTUAL.current;
@@ -916,6 +990,7 @@ function aplicarEscena(){
     cieloEl.className='escena-cielo';
     if(categoria==='tormenta') cieloEl.classList.add('tormenta');
     else if(['nublado','lluvia','niebla','nieve'].includes(categoria)){ cieloEl.classList.add('nublado'); if(!esDia) cieloEl.classList.add('noche'); }
+    else if((categoria==='despejado'||categoria==='parcial') && _esAmanecerOAtardecer()) cieloEl.classList.add('atardecer');
     else cieloEl.classList.add(esDia?'dia':'noche');
   }
 
@@ -1119,11 +1194,28 @@ function renderAlertas(){
 // ═══════════════════════════════════════════════════════════════
 function _cargarLugares(){ try{ LUGARES=JSON.parse(localStorage.getItem('clima_lugares')||'[]'); }catch(e){ LUGARES=[]; } }
 function _guardarLugares(){ localStorage.setItem('clima_lugares', JSON.stringify(LUGARES)); }
+async function _obtenerClimaMini(lat, lon){
+  const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,weather_code&timezone=auto';
+  const res=await fetch(url);
+  const data=await res.json();
+  return data.current||null;
+}
 function renderLugares(){
   document.getElementById('lugares-lista').innerHTML = LUGARES.length ? LUGARES.map(l=>
-    '<div class="row-item" onclick="seleccionarLugar(\''+l.id+'\')"><div class="row-icon" style="background:rgba(59,158,255,.15)">📍</div><div class="row-main"><div class="row-title">'+esc(l.nombre)+'</div></div>'+
+    '<div class="row-item" onclick="seleccionarLugar(\''+l.id+'\')"><div class="row-icon" style="background:rgba(59,158,255,.15)" id="lugar-ico-'+l.id+'">📍</div><div class="row-main"><div class="row-title">'+esc(l.nombre)+'</div></div>'+
+    '<div class="row-amt"><div class="row-amt-val" id="lugar-temp-'+l.id+'" style="font-size:13px;color:var(--text3)">···</div></div>'+
     '<button class="row-fav" style="font-size:18px" onclick="event.stopPropagation();borrarLugar(\''+l.id+'\')">🗑</button></div>'
   ).join('') : '<div class="empty"><div class="empty-icon">📍</div><div class="empty-text">Sin lugares guardados</div><div class="empty-sub">Agregá tu casa, trabajo, o cualquier ciudad</div></div>';
+  // temperatura en vivo de cada lugar guardado, para comparar de un vistazo sin tener que entrar a cada uno
+  LUGARES.forEach(l=>{
+    _obtenerClimaMini(l.lat, l.lon).then(c=>{
+      if(!c) return;
+      const tEl=document.getElementById('lugar-temp-'+l.id);
+      if(tEl){ tEl.textContent=Math.round(c.temperature_2m)+'°'; tEl.style.color='var(--text)'; tEl.style.fontWeight='800'; }
+      const iEl=document.getElementById('lugar-ico-'+l.id);
+      if(iEl) iEl.textContent=_iconoClima(c.weather_code);
+    }).catch(()=>{});
+  });
 }
 async function seleccionarLugar(id){
   const l=LUGARES.find(x=>x.id===id);
@@ -1571,6 +1663,7 @@ function guardarDespertador(){
 // ARRANQUE
 // ═══════════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', ()=>{
+  aplicarTema();
   _cargarLugares();
   iniciarConGeolocalizacion();
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
