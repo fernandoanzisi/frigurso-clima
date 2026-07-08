@@ -147,6 +147,10 @@
   .safety-badge.warn{background:rgba(245,184,61,.15);color:var(--gold)}
   .safety-badge.bad{background:rgba(248,113,113,.15);color:var(--red)}
 
+  .radar-map{width:100%;height:58vh;min-height:320px;border-radius:16px;overflow:hidden;background:var(--bg3)}
+  .radar-controles{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .radar-hora{font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap;min-width:74px;text-align:right}
+
   #ptr-indicator{position:fixed;top:8px;left:50%;transform:translate(-50%,-40px);opacity:0;z-index:150;width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:16px;transition:transform .25s,opacity .25s;pointer-events:none}
 </style>
 </head>
@@ -159,6 +163,7 @@
   <button class="nav-btn" id="nav-pronostico" onclick="navGo('pronostico',this)"><span class="ni">📊</span><span>Pronóstico</span></button>
   <button class="nav-btn" id="nav-alertas" onclick="navGo('alertas',this)"><span class="ni">⚠️</span><span>Alertas</span></button>
   <button class="nav-btn" id="nav-lugares" onclick="navGo('lugares',this)"><span class="ni">📍</span><span>Lugares</span></button>
+  <button class="nav-btn" id="nav-radar" onclick="navGo('radar',this)"><span class="ni">🛰️</span><span>Radar</span></button>
 </nav>
 
 <!-- HOME -->
@@ -239,6 +244,20 @@
   <div class="header"><div style="flex:1"><div class="header-title">📍 Lugares</div><div class="header-sub">Guardá los lugares que quieras revisar</div></div></div>
   <div class="section"><button class="btn-primary" onclick="abrirModalLugar()">+ Agregar lugar</button></div>
   <div class="section" style="margin-top:6px" id="lugares-lista"></div>
+</div>
+
+<!-- RADAR -->
+<div class="page" id="page-radar">
+  <div class="header"><div style="flex:1"><div class="header-title">🛰️ Radar de lluvia</div><div class="header-sub" id="radar-lugar">—</div></div></div>
+  <div class="section">
+    <div id="radar-map" class="radar-map"></div>
+    <div class="radar-controles">
+      <button class="btn-icon" id="radar-play-btn" onclick="toggleRadarPlay()">▶️</button>
+      <input type="range" id="radar-slider" min="0" max="0" value="0" oninput="mostrarFrameRadar(parseInt(this.value,10))" style="flex:1">
+      <div class="radar-hora" id="radar-hora">—</div>
+    </div>
+    <div class="card" style="font-size:11px;color:var(--text3);margin-top:10px">Radar de precipitación en tiempo real (RainViewer), con proyección a corto plazo ("próx."). Los colores muestran dónde está lloviendo/nevando ahora y hacia dónde se mueve.</div>
+  </div>
 </div>
 
 <!-- MODAL: AGREGAR LUGAR -->
@@ -922,7 +941,7 @@ function aplicarEscena(){
 // ═══════════════════════════════════════════════════════════════
 let _pagActual='home';
 let _poppingState=false;
-const PAGE_RENDER_FN={ home:renderHome, pronostico:renderPronostico, alertas:renderAlertas, lugares:renderLugares };
+const PAGE_RENDER_FN={ home:renderHome, pronostico:renderPronostico, alertas:renderAlertas, lugares:renderLugares, radar:renderRadar };
 function navGo(page,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const target=document.getElementById('page-'+page);
@@ -1115,6 +1134,102 @@ async function _agregarLugar(nombre, lat, lon){
   await cargarClimaParaUbicacion(lugar);
   renderLugares();
   toast('📍 '+nombre);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RADAR DE LLUVIA EN VIVO (Leaflet + RainViewer, datos reales gratis sin API key)
+// ═══════════════════════════════════════════════════════════════
+let _leafletCargado=false, _leafletCargando=null;
+function _cargarLeaflet(){
+  if(_leafletCargado) return Promise.resolve();
+  if(_leafletCargando) return _leafletCargando;
+  _leafletCargando=new Promise((resolve,reject)=>{
+    const link=document.createElement('link');
+    link.rel='stylesheet'; link.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+    const script=document.createElement('script');
+    script.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+    script.onload=()=>{ _leafletCargado=true; resolve(); };
+    script.onerror=()=>reject(new Error('No se pudo cargar el mapa'));
+    document.head.appendChild(script);
+  });
+  return _leafletCargando;
+}
+let _radarMap=null, _radarFrames=[], _radarFramesTs=0, _radarFrameIdx=0, _radarTileLayer=null, _radarPlaying=false, _radarTimer=null, _radarHost='';
+async function _obtenerFramesRadar(){
+  const res=await fetch('https://api.rainviewer.com/public/weather-maps.json');
+  const data=await res.json();
+  _radarHost=data.host;
+  const past=((data.radar&&data.radar.past)||[]).map(f=>({...f,esFuturo:false}));
+  const nowcast=((data.radar&&data.radar.nowcast)||[]).map(f=>({...f,esFuturo:true}));
+  _radarFrames=[...past, ...nowcast];
+  return {ultimoPasado:Math.max(0,past.length-1)};
+}
+function _urlTileRadar(frame){ return _radarHost+frame.path+'/256/{z}/{x}/{y}/2/1_1.png'; }
+async function inicializarRadar(){
+  const cont=document.getElementById('radar-map');
+  if(!cont) return;
+  try{ await _cargarLeaflet(); }catch(e){ toast('⚠️ No se pudo cargar el mapa del radar'); return; }
+  const lat=UBICACION_ACTIVA?UBICACION_ACTIVA.lat:-38.95, lon=UBICACION_ACTIVA?UBICACION_ACTIVA.lon:-68.06;
+  if(!_radarMap){
+    _radarMap=L.map('radar-map', {zoomControl:true, attributionControl:true}).setView([lat,lon], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:12, attribution:'© OpenStreetMap · Radar: RainViewer'}).addTo(_radarMap);
+    L.marker([lat,lon]).addTo(_radarMap);
+  } else {
+    _radarMap.setView([lat,lon], _radarMap.getZoom()||7);
+    setTimeout(()=>_radarMap.invalidateSize(), 50);
+  }
+  if(!_radarFrames.length || (Date.now()-_radarFramesTs)>5*60000){
+    try{
+      const {ultimoPasado}=await _obtenerFramesRadar();
+      _radarFramesTs=Date.now();
+      const slider=document.getElementById('radar-slider');
+      if(slider){ slider.max=String(_radarFrames.length-1); }
+      mostrarFrameRadar(ultimoPasado);
+    }catch(e){ toast('⚠️ No se pudo cargar el radar'); }
+  } else {
+    setTimeout(()=>_radarMap.invalidateSize(), 50);
+  }
+}
+function mostrarFrameRadar(idx){
+  if(!_radarMap || !_radarFrames.length) return;
+  idx=Math.max(0, Math.min(_radarFrames.length-1, idx));
+  _radarFrameIdx=idx;
+  const frame=_radarFrames[idx];
+  const nueva=L.tileLayer(_urlTileRadar(frame), {tileSize:256, opacity:0.75, zIndex:5});
+  nueva.addTo(_radarMap);
+  const anterior=_radarTileLayer;
+  _radarTileLayer=nueva;
+  if(anterior) setTimeout(()=>{ if(_radarMap) _radarMap.removeLayer(anterior); }, 300);
+  const slider=document.getElementById('radar-slider');
+  if(slider) slider.value=String(idx);
+  const horaEl=document.getElementById('radar-hora');
+  if(horaEl){
+    const d=new Date(frame.time*1000);
+    horaEl.textContent=fmtHora(d.toISOString())+(frame.esFuturo?' (próx.)':'');
+  }
+}
+function toggleRadarPlay(){
+  const btn=document.getElementById('radar-play-btn');
+  if(_radarPlaying){
+    clearInterval(_radarTimer); _radarTimer=null; _radarPlaying=false;
+    if(btn) btn.textContent='▶️';
+    return;
+  }
+  if(!_radarFrames.length) return;
+  _radarPlaying=true;
+  if(btn) btn.textContent='⏸️';
+  _radarTimer=setInterval(()=>{
+    if(_pagActual!=='radar'){ clearInterval(_radarTimer); _radarTimer=null; _radarPlaying=false; if(btn) btn.textContent='▶️'; return; }
+    let next=_radarFrameIdx+1;
+    if(next>=_radarFrames.length) next=0;
+    mostrarFrameRadar(next);
+  }, 700);
+}
+function renderRadar(){
+  const el=document.getElementById('radar-lugar');
+  if(el) el.textContent = UBICACION_ACTIVA ? UBICACION_ACTIVA.nombre : '—';
+  inicializarRadar();
 }
 
 // ═══════════════════════════════════════════════════════════════
