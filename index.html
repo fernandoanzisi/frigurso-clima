@@ -206,6 +206,7 @@
     <span class="safety-badge ok" id="home-safety-badge">Cargando...</span>
   </div>
   <div class="kpi-grid" id="home-kpis"></div>
+  <div class="section" id="home-aire" style="display:none"></div>
   <div class="section"><div class="section-title">Próximas horas</div><div class="pill-row" id="home-horas"></div></div>
   <div class="section" style="margin-top:14px"><div class="section-title">Alertas activas</div><div id="home-alertas"></div></div>
 </div>
@@ -339,6 +340,7 @@ function _iconoClima(code){
 // DATOS REALES DE CLIMA (Open-Meteo, gratis, sin API key)
 // ═══════════════════════════════════════════════════════════════
 let CLIMA_ACTUAL=null;
+let CALIDAD_AIRE_ACTUAL=null;
 let UBICACION_ACTIVA=null; // {nombre, lat, lon}
 let LUGARES=[];
 
@@ -350,6 +352,15 @@ async function _obtenerClima(lat, lon){
     '&timezone=auto&forecast_days=7';
   const res=await fetch(url);
   return res.json();
+}
+// calidad del aire real (Open-Meteo Air Quality, gratis sin key). El polen solo cubre Europa,
+// asi que no lo pedimos — para Argentina/Patagonia vendria vacio y seria informacion falsa.
+async function _obtenerCalidadAire(lat, lon){
+  const url='https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+lat+'&longitude='+lon+
+    '&current=pm10,pm2_5,us_aqi,ozone,dust&timezone=auto';
+  const res=await fetch(url);
+  const data=await res.json();
+  return data.current||null;
 }
 async function _reverseGeocode(lat, lon){
   try{
@@ -370,6 +381,7 @@ async function cargarClimaParaUbicacion(ubicacion){
     CLIMA_ACTUAL=await _obtenerClima(ubicacion.lat, ubicacion.lon);
     localStorage.setItem('clima_ultima_ubicacion', JSON.stringify(ubicacion));
     localStorage.setItem('clima_cache', JSON.stringify({clima:CLIMA_ACTUAL, ts:Date.now()}));
+    _obtenerCalidadAire(ubicacion.lat, ubicacion.lon).then(a=>{ CALIDAD_AIRE_ACTUAL=a; renderTodo(); }).catch(()=>{ CALIDAD_AIRE_ACTUAL=null; });
     renderTodo();
     verificarSaludoDespertador();
   }catch(e){
@@ -406,7 +418,17 @@ async function iniciarConGeolocalizacion(){
 // ═══════════════════════════════════════════════════════════════
 // ALERTAS DERIVADAS Y "SEGURO PARA SALIR" (umbrales sobre datos reales)
 // ═══════════════════════════════════════════════════════════════
-function calcularAlertas(clima){
+// categorias oficiales de US AQI (EPA) — el mismo estandar que usan la mayoria de las apps de clima
+function _categoriaAQI(aqi){
+  if(aqi==null) return null;
+  if(aqi<=50) return {nivel:'ok', texto:'Buena'};
+  if(aqi<=100) return {nivel:'ok', texto:'Moderada'};
+  if(aqi<=150) return {nivel:'warn', texto:'Dañina para grupos sensibles'};
+  if(aqi<=200) return {nivel:'warn', texto:'Dañina'};
+  if(aqi<=300) return {nivel:'bad', texto:'Muy dañina'};
+  return {nivel:'bad', texto:'Peligrosa'};
+}
+function calcularAlertas(clima, aire){
   if(!clima||!clima.current) return [];
   const c=clima.current;
   const alertas=[];
@@ -420,10 +442,15 @@ function calcularAlertas(clima){
   if(categoria==='tormenta') alertas.push({tipo:'tormenta', nivel:'bad', texto:'Tormenta eléctrica — evitá refugiarte bajo árboles'});
   if(categoria==='niebla') alertas.push({tipo:'niebla', nivel:'warn', texto:'Niebla — visibilidad reducida, manejá con luces bajas'});
   if(c.precipitation>=8) alertas.push({tipo:'lluvia', nivel:'bad', texto:'Lluvia intensa — las calles pueden anegarse'});
+  if(aire){
+    const cat=_categoriaAQI(aire.us_aqi);
+    if(cat && cat.nivel!=='ok') alertas.push({tipo:'aire', nivel:cat.nivel, texto:'Calidad del aire: '+cat.texto.toLowerCase()+' (AQI '+Math.round(aire.us_aqi)+')'});
+    if(aire.dust>=150) alertas.push({tipo:'polvo', nivel:'warn', texto:'Polvo en suspensión elevado — cerrá ventanas si sos sensible'});
+  }
   return alertas;
 }
-function calcularIndiceSeguridad(clima){
-  const alertas=calcularAlertas(clima);
+function calcularIndiceSeguridad(clima, aire){
+  const alertas=calcularAlertas(clima, aire);
   const hayBad=alertas.some(a=>a.nivel==='bad');
   const hayWarn=alertas.some(a=>a.nivel==='warn');
   const nivel = hayBad?'bad':hayWarn?'warn':'ok';
@@ -978,7 +1005,7 @@ function renderHome(){
   if(!CLIMA_ACTUAL){ return; }
   document.getElementById('home-lugar').textContent=UBICACION_ACTIVA?UBICACION_ACTIVA.nombre:'—';
   aplicarEscena();
-  const seg=calcularIndiceSeguridad(CLIMA_ACTUAL);
+  const seg=calcularIndiceSeguridad(CLIMA_ACTUAL, CALIDAD_AIRE_ACTUAL);
   const badge=document.getElementById('home-safety-badge');
   badge.className='safety-badge '+seg.nivel;
   badge.textContent=seg.mensaje;
@@ -990,6 +1017,20 @@ function renderHome(){
     '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_speed_10m)+' km/h</div><div class="kpi-lbl">Viento</div></div>'+
     '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_gusts_10m||0)+' km/h</div><div class="kpi-lbl">Ráfagas</div></div>';
 
+  const aireEl=document.getElementById('home-aire');
+  if(aireEl){
+    if(CALIDAD_AIRE_ACTUAL && CALIDAD_AIRE_ACTUAL.us_aqi!=null){
+      const a=CALIDAD_AIRE_ACTUAL, cat=_categoriaAQI(a.us_aqi);
+      aireEl.style.display='';
+      aireEl.innerHTML='<div class="card" style="display:flex;align-items:center;gap:12px">'+
+        '<div class="row-icon" style="background:rgba(59,158,255,.15)">🌬️</div>'+
+        '<div class="row-main"><div class="row-title">Calidad del aire: '+esc(cat.texto)+'</div><div class="row-sub">AQI '+Math.round(a.us_aqi)+' · PM2.5 '+Number(a.pm2_5||0).toFixed(1)+' µg/m³ · PM10 '+Number(a.pm10||0).toFixed(1)+' µg/m³</div></div>'+
+        '<div class="row-amt"><div class="row-amt-val '+cat.nivel+'">●</div></div></div>';
+    } else {
+      aireEl.style.display='none';
+    }
+  }
+
   const horas=(CLIMA_ACTUAL.hourly.time||[]).map((t,i)=>({t, temp:CLIMA_ACTUAL.hourly.temperature_2m[i], code:CLIMA_ACTUAL.hourly.weather_code[i]}))
     .filter(h=>new Date(h.t).getTime()>=Date.now()-3600000).slice(0,8);
   document.getElementById('home-horas').innerHTML=horas.map(h=>
@@ -1000,11 +1041,11 @@ function renderHome(){
     '</div>'
   ).join('');
 
-  const alertas=calcularAlertas(CLIMA_ACTUAL);
+  const alertas=calcularAlertas(CLIMA_ACTUAL, CALIDAD_AIRE_ACTUAL);
   document.getElementById('home-alertas').innerHTML=alertas.length ? alertas.map(alertaRowHtml).join('') : '<div class="empty" style="padding:16px 0"><div class="empty-sub">Sin alertas activas</div></div>';
 }
 function alertaRowHtml(a){
-  const icono={viento:'💨',helada:'🥶',calor:'🥵',tormenta:'⛈️',niebla:'🌫️',lluvia:'🌧️'}[a.tipo]||'⚠️';
+  const icono={viento:'💨',helada:'🥶',calor:'🥵',tormenta:'⛈️',niebla:'🌫️',lluvia:'🌧️',aire:'🌬️',polvo:'🌪️'}[a.tipo]||'⚠️';
   return '<div class="row-item static"><div class="row-icon" style="background:rgba(59,158,255,.15)">'+icono+'</div><div class="row-main"><div class="row-title">'+esc(a.texto)+'</div></div>'+
     '<div class="row-amt"><div class="row-amt-val '+a.nivel+'">●</div></div></div>';
 }
@@ -1064,12 +1105,12 @@ function renderPronostico(){
 // ═══════════════════════════════════════════════════════════════
 function renderAlertas(){
   if(!CLIMA_ACTUAL) return;
-  const seg=calcularIndiceSeguridad(CLIMA_ACTUAL);
+  const seg=calcularIndiceSeguridad(CLIMA_ACTUAL, CALIDAD_AIRE_ACTUAL);
   const badge=document.getElementById('alertas-safety-badge');
   badge.className='safety-badge '+seg.nivel;
   badge.textContent=seg.mensaje;
   document.getElementById('alertas-safety-razones').innerHTML = seg.razones.length ? '• '+seg.razones.map(esc).join('<br>• ') : 'No hay factores de riesgo detectados ahora mismo.';
-  const alertas=calcularAlertas(CLIMA_ACTUAL);
+  const alertas=calcularAlertas(CLIMA_ACTUAL, CALIDAD_AIRE_ACTUAL);
   document.getElementById('alertas-lista').innerHTML=alertas.length ? alertas.map(alertaRowHtml).join('') : '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin alertas activas</div></div>';
 }
 
