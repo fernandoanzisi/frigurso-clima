@@ -405,9 +405,11 @@ function _intensidadNieve(mm){ return Math.max(8, Math.min(30, Math.round((mm||1
 
 // ── motor de particulas en canvas: sol con rayos, nubes con blur real, lluvia con angulo de viento, nieve con deriva y profundidad ──
 let _canvasFondo=null, _ctxFondo=null, _canvasFrente=null, _ctxFrente=null, _rafId=null, _tiempoEscena=0;
-let _nubesEscena=[], _particulasLluvia=[], _particulasNieve=[];
-let _condicionEscena={categoria:'despejado', esDia:true, vientoKmh:0};
+let _nubesEscena=[], _particulasLluvia=[], _particulasNieve=[], _splashesLluvia=[];
+let _condicionEscena={categoria:'despejado', esDia:true, vientoKmh:0, precipMm:0};
 let _boltActivoHasta=0, _boltPuntos=null;
+
+function _sueloY(alto){ return alto*0.74; }
 
 function _crearNubes(cantidad, ancho, alto){
   const arr=[];
@@ -416,8 +418,46 @@ function _crearNubes(cantidad, ancho, alto){
 }
 function _crearParticulasLluvia(cantidad, ancho, alto){
   const arr=[];
-  for(let i=0;i<cantidad;i++) arr.push({ x:Math.random()*ancho, y:Math.random()*alto, largo:14+Math.random()*16, vel:9+Math.random()*7, opacidad:0.35+Math.random()*0.4 });
+  for(let i=0;i<cantidad;i++){
+    const prof=Math.random(); // 0=gota cercana (grande, rapida) 1=gota lejana (chica, lenta) — da profundidad real
+    arr.push({ x:Math.random()*ancho, y:Math.random()*alto, largo:10+prof*14+Math.random()*6, vel:7+(1-prof)*10+Math.random()*3, opacidad:0.25+(1-prof)*0.5+Math.random()*0.15, grosor:0.9+(1-prof)*1.1 });
+  }
   return arr;
+}
+function _spawnSplash(x,y){
+  if(_splashesLluvia.length>70) return;
+  _splashesLluvia.push({x,y,vida:0,vidaMax:14+Math.random()*8});
+}
+function _dibujarSplashes(ctx){
+  ctx.save();
+  for(let i=_splashesLluvia.length-1;i>=0;i--){
+    const s=_splashesLluvia[i];
+    s.vida++;
+    const t=s.vida/s.vidaMax;
+    if(t>=1){ _splashesLluvia.splice(i,1); continue; }
+    const r=2+t*7;
+    ctx.globalAlpha=(1-t)*0.55;
+    ctx.strokeStyle='rgba(215,232,255,.9)';
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.ellipse(s.x, s.y, r, r*0.32, 0, 0, Math.PI*2); ctx.stroke();
+    if(t<0.4){
+      ctx.globalAlpha=(1-t/0.4)*0.65;
+      ctx.fillStyle='rgba(215,232,255,.95)';
+      ctx.beginPath(); ctx.arc(s.x-r*0.65, s.y-t*7, 1, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(s.x+r*0.65, s.y-t*7, 1, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+function _dibujarSueloMojado(ctx, ancho, groundY, intensidad){
+  ctx.save();
+  const grad=ctx.createLinearGradient(0, groundY-3, 0, groundY+11);
+  grad.addColorStop(0,'rgba(220,232,245,0)');
+  grad.addColorStop(0.5,'rgba(220,232,245,'+(0.22*intensidad).toFixed(3)+')');
+  grad.addColorStop(1,'rgba(220,232,245,0)');
+  ctx.fillStyle=grad;
+  ctx.fillRect(0, groundY-3, ancho, 14);
+  ctx.restore();
 }
 function _crearParticulasNieve(cantidad, ancho, alto){
   const arr=[];
@@ -449,14 +489,14 @@ function _generarBoltPuntos(ancho,alto){
   return {tronco, ramas};
 }
 
-function _dibujarNubes(ctx, ancho, alto, factorViento){
+function _dibujarNubes(ctx, ancho, alto, factorViento, color){
   ctx.save();
   _nubesEscena.forEach(n=>{
     n.x += n.velocidad*factorViento*0.4;
     if(n.x-90*n.escala>ancho) n.x=-90*n.escala;
     ctx.filter='blur(6px)';
     ctx.globalAlpha=n.opacidad;
-    ctx.fillStyle='#ffffff';
+    ctx.fillStyle=color||'#ffffff';
     const w=70*n.escala, h=26*n.escala;
     ctx.beginPath();
     ctx.ellipse(n.x, n.y, w*0.55, h, 0, 0, Math.PI*2);
@@ -505,19 +545,26 @@ function _dibujarLuna(ctx, ancho, alto){
   ctx.beginPath(); ctx.arc(cx+r*0.25,cy-r*0.15,r*0.12,0,Math.PI*2); ctx.fill();
   ctx.restore();
 }
-function _dibujarLluvia(ctx, ancho, alto, vientoDir){
+function _dibujarLluvia(ctx, ancho, alto, vientoDir, groundY){
   ctx.save();
-  ctx.strokeStyle='rgba(190,220,255,.75)'; ctx.lineCap='round';
+  ctx.strokeStyle='rgba(190,220,255,.8)'; ctx.lineCap='round';
   _particulasLluvia.forEach(p=>{
     p.y+=p.vel; p.x+=vientoDir*p.vel*0.35;
-    if(p.y>alto){ p.y=-10; p.x=Math.random()*ancho; }
-    ctx.globalAlpha=p.opacidad; ctx.lineWidth=1.4;
+    const finY=p.y+p.largo;
+    if(finY>=groundY){
+      _spawnSplash(p.x-vientoDir*p.largo*0.35, groundY);
+      p.y=-Math.random()*alto*0.4; p.x=Math.random()*ancho;
+      return;
+    }
+    if(p.y>alto){ p.y=-10; p.x=Math.random()*ancho; return; }
+    ctx.globalAlpha=p.opacidad; ctx.lineWidth=p.grosor;
     ctx.beginPath();
     ctx.moveTo(p.x,p.y);
-    ctx.lineTo(p.x-vientoDir*p.largo*0.35, p.y+p.largo);
+    ctx.lineTo(p.x-vientoDir*p.largo*0.35, finY);
     ctx.stroke();
   });
   ctx.restore();
+  _dibujarSplashes(ctx);
 }
 function _dibujarNieve(ctx, ancho, alto){
   ctx.save();
@@ -581,15 +628,19 @@ function _tickEscena(){
   _ctxFondo.clearRect(0,0,ancho,alto);
   _ctxFrente.clearRect(0,0,ancho,alto);
 
-  const {categoria,esDia,vientoKmh}=_condicionEscena;
+  const {categoria,esDia,vientoKmh,precipMm}=_condicionEscena;
   if(esDia && (categoria==='despejado'||categoria==='parcial')) _dibujarSol(_ctxFondo,ancho,alto,_tiempoEscena);
   if(!esDia && (categoria==='despejado'||categoria==='parcial')) _dibujarLuna(_ctxFondo,ancho,alto);
   if(['nublado','lluvia','niebla','nieve','parcial','tormenta'].includes(categoria)){
-    _dibujarNubes(_ctxFondo, ancho, alto, Math.min(3, 1+vientoKmh/25));
+    const colorNube = categoria==='tormenta' ? '#5c6672' : categoria==='lluvia' ? '#8f9ba8' : categoria==='nieve' ? '#e9eef3' : categoria==='nublado' ? '#c7d0d9' : '#ffffff';
+    _dibujarNubes(_ctxFondo, ancho, alto, Math.min(3, 1+vientoKmh/25), colorNube);
   }
   if(categoria==='lluvia'||categoria==='tormenta'){
     const dir = vientoKmh>5 ? Math.min(1, vientoKmh/60) : 0;
-    _dibujarLluvia(_ctxFrente, ancho, alto, dir);
+    const groundY=_sueloY(alto);
+    _dibujarLluvia(_ctxFrente, ancho, alto, dir, groundY);
+    const intensidad=Math.min(1, (precipMm||1)/9);
+    _dibujarSueloMojado(_ctxFrente, ancho, groundY, 0.45+intensidad*0.55);
   }
   if(categoria==='nieve') _dibujarNieve(_ctxFrente, ancho, alto);
 
@@ -651,10 +702,11 @@ function aplicarEscena(){
   const dpr=(typeof window!=='undefined'&&window.devicePixelRatio)||1;
   const ancho=(_canvasFondo?_canvasFondo.width:600)/dpr, alto=(_canvasFondo?_canvasFondo.height:412)/dpr;
 
-  _condicionEscena={categoria, esDia, vientoKmh:c.wind_speed_10m||0};
+  _condicionEscena={categoria, esDia, vientoKmh:c.wind_speed_10m||0, precipMm:c.precipitation||0};
   _nubesEscena = categoria==='despejado' ? [] : _crearNubes(categoria==='parcial'?3:6, ancho, alto);
   _particulasLluvia = ['lluvia','tormenta'].includes(categoria) ? _crearParticulasLluvia(_intensidadLluvia(c.precipitation)*3, ancho, alto) : [];
   _particulasNieve = categoria==='nieve' ? _crearParticulasNieve(_intensidadNieve(c.precipitation)*3, ancho, alto) : [];
+  _splashesLluvia=[];
   _renderEstrellas(!esDia && (categoria==='despejado'||categoria==='parcial'));
 
   const nieblaEl=document.getElementById('escena-niebla');
