@@ -264,7 +264,11 @@
     <div class="field-wrap"><div class="field-label">Frase para despertarte</div><input class="input" id="desp-frase" placeholder="Es hora de levantarse"></div>
     <div class="field-wrap"><div class="field-label">Hora aproximada</div><input type="time" class="input" id="desp-hora"></div>
     <div class="field-wrap"><div class="field-label">Repetir el aviso (por si no lo escuchás)</div><div class="pill-row" id="desp-repetir-pills"></div></div>
-    <div class="field-wrap"><div class="field-label">Voz</div><select class="input" id="desp-voz"></select></div>
+    <div class="field-wrap"><div class="field-label">Voz</div>
+      <div class="pill-row" id="desp-genero-voz-pills" style="margin-bottom:8px"></div>
+      <select class="input" id="desp-voz"></select>
+      <button class="btn-secondary" style="margin-top:8px" onclick="probarVozSeleccionada()">▶️ Probar esta voz</button>
+    </div>
     <div class="field-wrap"><div class="field-label">Sonido de fondo</div><div class="pill-row" id="desp-sonido-pills"></div></div>
     <div class="field-wrap" id="desp-sonido-propio-wrap" style="display:none">
       <label class="btn-secondary" style="display:block;text-align:center">
@@ -346,10 +350,20 @@ async function cargarClimaParaUbicacion(ubicacion){
   try{
     CLIMA_ACTUAL=await _obtenerClima(ubicacion.lat, ubicacion.lon);
     localStorage.setItem('clima_ultima_ubicacion', JSON.stringify(ubicacion));
+    localStorage.setItem('clima_cache', JSON.stringify({clima:CLIMA_ACTUAL, ts:Date.now()}));
     renderTodo();
     verificarSaludoDespertador();
   }catch(e){
     toast('⚠️ No se pudo obtener el clima — revisá tu conexión');
+    // sin conexion justo a la hora del despertador (ej. wifi que todavia no prendio a la mañana):
+    // en vez de quedarse callado, usa el ultimo clima real que se guardo con exito, aunque sea de antes
+    if(!CLIMA_ACTUAL){
+      try{
+        const cache=JSON.parse(localStorage.getItem('clima_cache')||'null');
+        if(cache && cache.clima) CLIMA_ACTUAL=cache.clima;
+      }catch(e2){}
+    }
+    if(CLIMA_ACTUAL) verificarSaludoDespertador();
   }
 }
 async function actualizarClima(){
@@ -1107,13 +1121,48 @@ async function _agregarLugar(nombre, lat, lon){
 // DESPERTADOR CON VOZ (Web Speech API — sin costo, voz del sistema)
 // ═══════════════════════════════════════════════════════════════
 let VOCES_DISPONIBLES=[];
+// heuristica por nombre: la Web Speech API no da el genero de la voz, asi que lo adivinamos
+// por nombres tipicos de voces en espanol (varia segun el celular/SO, es aproximado)
+const _NOMBRES_VOZ_FEMENINA=['mónica','monica','paulina','helena','elena','sabina','laura','conchita','lucia','lucía','camila','marisol','soledad','isabel','valeria','carmen','pilar','esperanza','maría','maria','sofía','sofia','victoria','inés','ines','alejandra','patricia','rosa','beatriz','diana','angélica','angelica','yolanda','samantha','female','mujer'];
+const _NOMBRES_VOZ_MASCULINA=['jorge','diego','pablo','juan','carlos','enrique','miguel','fernando','andrés','andres','raúl','raul','alonso','antonio','male','hombre'];
+function _generoVoz(nombre){
+  const n=(nombre||'').toLowerCase();
+  if(_NOMBRES_VOZ_FEMENINA.some(k=>n.includes(k))) return 'f';
+  if(_NOMBRES_VOZ_MASCULINA.some(k=>n.includes(k))) return 'm';
+  return '?';
+}
+function _iconoGenero(g){ return g==='f' ? '🚺' : g==='m' ? '🚹' : '🔊'; }
+let _generoVozSel='todas';
+function renderGeneroVozPills(){
+  const el=document.getElementById('desp-genero-voz-pills');
+  if(!el) return;
+  const opciones=[{id:'todas',nombre:'🔊 Todas'},{id:'f',nombre:'🚺 Femeninas'},{id:'m',nombre:'🚹 Masculinas'}];
+  el.innerHTML=opciones.map(o=>'<button class="pill '+(o.id===_generoVozSel?'sel':'')+'" onclick="elegirGeneroVoz(\''+o.id+'\')">'+o.nombre+'</button>').join('');
+}
+function elegirGeneroVoz(id){ _generoVozSel=id; renderGeneroVozPills(); renderVocesSelect(); }
+function renderVocesSelect(){
+  const sel=document.getElementById('desp-voz');
+  if(!sel) return;
+  const valorPrevio=sel.value;
+  const filtradas = _generoVozSel==='todas' ? VOCES_DISPONIBLES : VOCES_DISPONIBLES.filter(v=>_generoVoz(v.name)===_generoVozSel);
+  const lista = filtradas.length ? filtradas : VOCES_DISPONIBLES;
+  sel.innerHTML = lista.map(v=>'<option value="'+esc(v.name)+'">'+_iconoGenero(_generoVoz(v.name))+' '+esc(v.name)+' ('+v.lang+')</option>').join('');
+  if(lista.some(v=>v.name===valorPrevio)) sel.value=valorPrevio;
+}
 function cargarVoces(){
   if(!('speechSynthesis' in window)) return;
   VOCES_DISPONIBLES=window.speechSynthesis.getVoices().filter(v=>v.lang && v.lang.toLowerCase().startsWith('es'));
-  const sel=document.getElementById('desp-voz');
-  if(sel && VOCES_DISPONIBLES.length){
-    sel.innerHTML=VOCES_DISPONIBLES.map(v=>'<option value="'+esc(v.name)+'">'+esc(v.name)+' ('+v.lang+')</option>').join('');
-  }
+  renderVocesSelect();
+}
+function probarVozSeleccionada(){
+  if(!('speechSynthesis' in window)){ toast('Este dispositivo no soporta voz'); return; }
+  const nombreVoz=document.getElementById('desp-voz').value;
+  const voz=VOCES_DISPONIBLES.find(v=>v.name===nombreVoz);
+  const utter=new SpeechSynthesisUtterance('Hola, así sueno yo.');
+  if(voz) utter.voice=voz;
+  utter.lang='es-ES'; utter.rate=0.95; utter.pitch=1.05;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utter);
 }
 if(typeof window!=='undefined' && 'speechSynthesis' in window){
   window.speechSynthesis.onvoiceschanged=cargarVoces;
@@ -1332,6 +1381,8 @@ function abrirModalDespertador(){
   document.getElementById('desp-nombre').value=config.nombre||'';
   document.getElementById('desp-frase').value=config.frase||'';
   document.getElementById('desp-hora').value=config.hora||'07:00';
+  _generoVozSel='todas';
+  renderGeneroVozPills();
   cargarVoces();
   if(config.voz) document.getElementById('desp-voz').value=config.voz;
   _sonidoSel=config.sonido||'acorde';
@@ -1368,6 +1419,28 @@ window.addEventListener('DOMContentLoaded', ()=>{
   iniciarConGeolocalizacion();
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 });
+// el celular bloquea la voz/audio automatico si no viene de un toque directo tuyo —
+// "destrabamos" la voz apenas toques cualquier cosa en la app, para que el saludo
+// automatico de la mañana tenga muchas mas chances de sonar realmente.
+let _audioDesbloqueado=false;
+function _desbloquearAudio(){
+  if(_audioDesbloqueado) return;
+  _audioDesbloqueado=true;
+  try{
+    if('speechSynthesis' in window){
+      const u=new SpeechSynthesisUtterance(' ');
+      u.volume=0; window.speechSynthesis.speak(u);
+    }
+  }catch(e){}
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC){ const ctx=new AC(); if(ctx.state==='suspended') ctx.resume(); setTimeout(()=>{ try{ ctx.close(); }catch(e){} }, 50); }
+  }catch(e){}
+  document.removeEventListener('touchstart', _desbloquearAudio);
+  document.removeEventListener('click', _desbloquearAudio);
+}
+document.addEventListener('touchstart', _desbloquearAudio, {once:true});
+document.addEventListener('click', _desbloquearAudio, {once:true});
 document.addEventListener('visibilitychange', async ()=>{
   // al volver a la app (ej. la abrís a la mañana), primero refrescamos el clima
   // real de ESE momento y recien despues evaluamos si corresponde saludar —
