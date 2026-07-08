@@ -690,7 +690,7 @@ function generarMensajeDespertador(nombre, clima){
   const c=clima.current;
   const temp=Math.round(c.temperature_2m);
   const categoria=_categoriaClima(c.weather_code);
-  let saludo='Hola'+(nombre?' '+nombre:'')+', ¡buen día!';
+  let saludo='Es hora de levantarse'+(nombre?', '+nombre:'')+'. ¡Buen día!';
   let frase;
   if(temp<=0) frase='Hace '+temp+' grados, bajo cero. Abrigate bien antes de salir.';
   else if(temp<=8) frase='Hace frío, '+temp+' grados. Llevá abrigo.';
