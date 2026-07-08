@@ -252,6 +252,7 @@
       <button class="pill" id="desp-activo-toggle" onclick="toggleDespertadorActivo()" style="width:100%;text-align:center">Desactivado</button>
     </div>
     <div class="field-wrap"><div class="field-label">Tu nombre</div><input class="input" id="desp-nombre" placeholder="Ej: Fernando"></div>
+    <div class="field-wrap"><div class="field-label">Frase para despertarte</div><input class="input" id="desp-frase" placeholder="Es hora de levantarse"></div>
     <div class="field-wrap"><div class="field-label">Hora aproximada</div><input type="time" class="input" id="desp-hora"></div>
     <div class="field-wrap"><div class="field-label">Voz</div><select class="input" id="desp-voz"></select></div>
     <button class="btn-primary" onclick="guardarDespertador()">Guardar</button>
@@ -686,11 +687,12 @@ if(typeof window!=='undefined' && 'speechSynthesis' in window){
   window.speechSynthesis.onvoiceschanged=cargarVoces;
   cargarVoces();
 }
-function generarMensajeDespertador(nombre, clima){
+function generarMensajeDespertador(nombre, clima, fraseSaludo){
   const c=clima.current;
   const temp=Math.round(c.temperature_2m);
   const categoria=_categoriaClima(c.weather_code);
-  let saludo='Es hora de levantarse'+(nombre?', '+nombre:'')+'. ¡Buen día!';
+  const base=(fraseSaludo && fraseSaludo.trim()) ? fraseSaludo.trim() : 'Es hora de levantarse';
+  let saludo=base+(nombre?', '+nombre:'')+'.';
   let frase;
   if(temp<=0) frase='Hace '+temp+' grados, bajo cero. Abrigate bien antes de salir.';
   else if(temp<=8) frase='Hace frío, '+temp+' grados. Llevá abrigo.';
@@ -755,7 +757,7 @@ function verificarSaludoDespertador(){
 function ejecutarSaludoDespertador(){
   if(!CLIMA_ACTUAL) return;
   const config=JSON.parse(localStorage.getItem('clima_despertador')||'null');
-  const mensaje=generarMensajeDespertador(config?config.nombre:'', CLIMA_ACTUAL);
+  const mensaje=generarMensajeDespertador(config?config.nombre:'', CLIMA_ACTUAL, config?config.frase:'');
   iniciarMusicaSuave();
   setTimeout(()=>{ hablarSaludo(mensaje); }, 900);
   localStorage.setItem('clima_ultimo_saludo', fechaHoy());
@@ -771,6 +773,7 @@ function abrirModalDespertador(){
   document.getElementById('desp-activo-toggle').textContent = config.activo?'Activado':'Desactivado';
   document.getElementById('desp-activo-toggle').classList.toggle('sel', config.activo);
   document.getElementById('desp-nombre').value=config.nombre||'';
+  document.getElementById('desp-frase').value=config.frase||'';
   document.getElementById('desp-hora').value=config.hora||'07:00';
   cargarVoces();
   if(config.voz) document.getElementById('desp-voz').value=config.voz;
@@ -785,9 +788,10 @@ function toggleDespertadorActivo(){
 function guardarDespertador(){
   const activo=document.getElementById('desp-activo-toggle').classList.contains('sel');
   const nombre=(document.getElementById('desp-nombre').value||'').trim();
+  const frase=(document.getElementById('desp-frase').value||'').trim();
   const hora=document.getElementById('desp-hora').value||'07:00';
   const voz=document.getElementById('desp-voz').value||'';
-  localStorage.setItem('clima_despertador', JSON.stringify({activo,nombre,hora,voz}));
+  localStorage.setItem('clima_despertador', JSON.stringify({activo,nombre,frase,hora,voz}));
   cerrarModal('despertador');
   toast('✅ Guardado');
 }
@@ -800,8 +804,14 @@ window.addEventListener('DOMContentLoaded', ()=>{
   iniciarConGeolocalizacion();
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 });
-document.addEventListener('visibilitychange', ()=>{
-  if(!document.hidden) verificarSaludoDespertador();
+document.addEventListener('visibilitychange', async ()=>{
+  // al volver a la app (ej. la abrís a la mañana), primero refrescamos el clima
+  // real de ESE momento y recien despues evaluamos si corresponde saludar —
+  // asi el saludo siempre cuenta el clima de ahora, no uno viejo de cuando
+  // se abrio la app por ultima vez.
+  if(!document.hidden && UBICACION_ACTIVA){
+    await cargarClimaParaUbicacion(UBICACION_ACTIVA); // esto ya llama a verificarSaludoDespertador() al final
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
