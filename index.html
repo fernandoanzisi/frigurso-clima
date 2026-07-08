@@ -916,6 +916,21 @@ document.addEventListener('visibilitychange', async ()=>{
     await cargarClimaParaUbicacion(UBICACION_ACTIVA); // esto ya llama a verificarSaludoDespertador() al final
   }
 });
+// chequeo periodico: si dejás la app abierta (sin cambiar de pantalla ni
+// bloquear el telefono), igual revisa cada 30s si ya es la hora configurada
+// y saluda sola, sin necesidad de reabrir la app.
+setInterval(async ()=>{
+  if(document.hidden || !UBICACION_ACTIVA) return;
+  const config=JSON.parse(localStorage.getItem('clima_despertador')||'null');
+  if(!config || !config.activo || !config.hora || _yaSaludoHoy()) return;
+  const ahora=new Date();
+  const [hConfig,mConfig]=config.hora.split(':').map(Number);
+  const minutosConfig=hConfig*60+mConfig;
+  const minutosActual=ahora.getHours()*60+ahora.getMinutes();
+  if(minutosActual>=minutosConfig && minutosActual<=minutosConfig+90){
+    await cargarClimaParaUbicacion(UBICACION_ACTIVA); // refresca el clima real justo antes y dispara el saludo
+  }
+}, 30000);
 
 // ═══════════════════════════════════════════════════════════════
 // PULL TO REFRESH
