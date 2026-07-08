@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Frigurso Clima</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0a1930">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  :root{
+    --bg:#0a1930;--bg2:#0e2340;--bg3:#163256;--card:#102743;
+    --text:#eef4fb;--text2:#a9c1de;--text3:#5f7fa5;
+    --accent:#3b9eff;--accent2:#38bdf8;--gold:#f5b83d;
+    --green:#22c55e;--red:#f87171;--border:#1c3b5f;
+    --shadow:0 2px 16px rgba(0,0,0,.5);
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --mono:'SF Mono','Fira Code',monospace;
+    --sab:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{overscroll-behavior-y:contain}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh}
+  button{font-family:var(--font);cursor:pointer;border:none;outline:none;background:none}
+  input,select{font-family:var(--font)}
+  ::-webkit-scrollbar{display:none}
+
+  .nav-bottom{position:fixed;bottom:0;left:0;right:0;z-index:100;background:var(--bg2);border-top:1px solid var(--border);display:flex;height:calc(58px + var(--sab));padding-bottom:var(--sab)}
+  .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--text3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+  .nav-btn .ni{font-size:22px}.nav-btn.active{color:var(--accent2)}.nav-btn:active{opacity:.7}
+
+  .header{position:sticky;top:0;z-index:50;background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;gap:10px}
+  .header-title{font-size:19px;font-weight:800;color:var(--text);flex:1}
+  .header-sub{font-size:11px;color:var(--text3)}
+  .btn-icon{width:38px;height:38px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+  .page{display:none;padding-bottom:calc(78px + var(--sab))}.page.active{display:block}
+  .section{padding:14px 14px 0}
+  .section-title{font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow)}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:14px}
+  .kpi-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 12px;text-align:center}
+  .kpi-val{font-size:20px;font-weight:900;font-family:var(--mono)}
+  .kpi-lbl{font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+
+  .row-item{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:8px}
+  .row-item.static{cursor:default}
+  .row-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+  .row-main{flex:1;min-width:0}
+  .row-title{font-size:14px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row-sub{font-size:11px;color:var(--text3);margin-top:2px}
+  .row-amt{text-align:right;flex-shrink:0}
+  .row-amt-val{font-size:15px;font-weight:800;font-family:var(--mono)}
+  .row-amt-val.ok{color:var(--green)}.row-amt-val.warn{color:var(--gold)}.row-amt-val.bad{color:var(--red)}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+  .modal-overlay.open{opacity:1;pointer-events:all}
+  .modal{background:var(--bg2);border-radius:22px 22px 0 0;width:100%;max-width:520px;padding:20px 18px calc(30px + var(--sab));border-top:1px solid var(--border);transform:translateY(100%);transition:transform .25s;max-height:90dvh;overflow-y:auto}
+  .modal-overlay.open .modal{transform:translateY(0)}
+  .modal-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:16px}
+  .field-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+  .field-wrap{margin-bottom:14px}
+  .input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:15px}
+  .btn-primary{width:100%;padding:15px;border-radius:14px;background:var(--accent);color:#04152b;font-size:15px;font-weight:800;margin-bottom:8px}
+  .btn-secondary{width:100%;padding:13px;border-radius:14px;background:var(--bg3);color:var(--text);font-size:14px;font-weight:700;border:1px solid var(--border);margin-bottom:8px}
+  .btn-ghost{width:100%;padding:13px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:14px;font-weight:600;margin-bottom:8px}
+  .btn-danger{width:100%;padding:13px;border-radius:14px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:14px;font-weight:700;margin-bottom:8px}
+  .pill-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+  .pill{padding:8px 14px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;flex-shrink:0}
+  .pill.sel{background:rgba(59,158,255,.18);border-color:var(--accent);color:var(--accent2);font-weight:700}
+
+  .toast{position:fixed;bottom:calc(75px + var(--sab));left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#04152b;padding:10px 20px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;transition:all .25s;z-index:9999;white-space:nowrap;pointer-events:none;max-width:88vw;overflow:hidden;text-overflow:ellipsis}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .empty{text-align:center;padding:50px 20px}
+  .empty-icon{font-size:52px;margin-bottom:12px}
+  .empty-text{font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px}
+  .empty-sub{font-size:12px;color:var(--text3)}
+  .chart-canvas-wrap{background:var(--bg3);border-radius:14px;padding:8px;margin-bottom:10px}
+
+  /* ═══════ ESCENA ANIMADA DE CLIMA ═══════ */
+  .escena-wrap{position:relative;width:100%;aspect-ratio:16/11;border-radius:18px;overflow:hidden;margin:14px 0;box-shadow:var(--shadow)}
+  .escena-cielo{position:absolute;inset:0;transition:background 1.2s ease}
+  .escena-cielo.dia{background:linear-gradient(180deg,#3b9eff 0%,#8ecdfb 55%,#bfe4ff 100%)}
+  .escena-cielo.atardecer{background:linear-gradient(180deg,#2b3a67 0%,#e08a4f 55%,#f6c66b 100%)}
+  .escena-cielo.noche{background:linear-gradient(180deg,#050914 0%,#0d1a33 60%,#152a4d 100%)}
+  .escena-cielo.nublado{background:linear-gradient(180deg,#5b6b7d 0%,#8494a3 55%,#aab6bf 100%)}
+  .escena-cielo.nublado.noche{background:linear-gradient(180deg,#0c111a 0%,#232f3d 60%,#333f4d 100%)}
+  .escena-cielo.tormenta{background:linear-gradient(180deg,#20232b 0%,#3a3f49 60%,#4d525c 100%)}
+
+  .escena-sol{position:absolute;width:15%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#fff3b0 0%,#ffce54 60%,#ffb020 100%);box-shadow:0 0 40px 10px rgba(255,206,84,.55);top:8%;right:14%;transition:opacity .8s}
+  .escena-luna{position:absolute;width:11%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fdfdfd,#c9d3e0 70%,#aab6c9);box-shadow:0 0 26px 6px rgba(255,255,255,.35);top:8%;right:16%;transition:opacity .8s}
+  .escena-estrella{position:absolute;width:3px;height:3px;background:#fff;border-radius:50%;opacity:.8;animation:centellar 3s ease-in-out infinite}
+  @keyframes centellar{0%,100%{opacity:.3}50%{opacity:1}}
+
+  .escena-nube{position:absolute;background:#fff;border-radius:50px;opacity:.92;filter:blur(.3px)}
+  .escena-nube::before,.escena-nube::after{content:'';position:absolute;background:inherit;border-radius:50%}
+  @keyframes derivar{from{transform:translateX(-10%)}to{transform:translateX(120%)}}
+
+  .escena-suelo{position:absolute;left:0;right:0;bottom:0;height:26%;background:linear-gradient(180deg,#3a7d4f 0%,#2b5c3a 100%)}
+  .escena-suelo.helado{background:linear-gradient(180deg,#c7d9e6 0%,#9fb8cc 100%)}
+  .escena-suelo.nevado{background:linear-gradient(180deg,#eef4fb 0%,#d3e2f0 100%)}
+
+  .escena-casa{position:absolute;bottom:18%;left:8%;width:30%;max-width:150px}
+  .escena-casa-cuerpo{background:#8a5a3c;height:60%;border-radius:2px 2px 0 0;position:relative}
+  .escena-casa-techo{width:0;height:0;border-left:calc(50% + 8px) solid transparent;border-right:calc(50% + 8px) solid transparent;border-bottom:38px solid #5c3a26;margin:0 -8px}
+  .escena-casa-ventana{position:absolute;width:22%;height:28%;background:#ffe27a;top:20%;left:15%;border-radius:2px;box-shadow:0 0 8px rgba(255,226,122,.6)}
+  .escena-casa-puerta{position:absolute;width:24%;height:55%;background:#3a2415;bottom:0;right:18%;border-radius:3px 3px 0 0}
+  .escena-chimenea{position:absolute;width:10%;height:22px;background:#5c3a26;top:-20px;right:14%}
+  .escena-humo{position:absolute;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.55);top:-30px}
+
+  .escena-arbol{position:absolute;bottom:16%;transform-origin:bottom center;animation:balanceo var(--dur-viento,4s) ease-in-out infinite}
+  .escena-arbol-tronco{width:8%;height:38%;background:#5c3a26;margin:0 auto;border-radius:2px}
+  .escena-arbol-copa{width:100%;aspect-ratio:1.1;border-radius:50%;background:radial-gradient(circle at 35% 30%,#4f9d5e,#2e6b3d 75%);margin-bottom:-6%}
+  @keyframes balanceo{0%,100%{transform:rotate(calc(-1deg * var(--amp-viento,2)))}50%{transform:rotate(calc(1deg * var(--amp-viento,2)))}}
+
+  .escena-lluvia,.escena-nieve{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+  .gota{position:absolute;width:2px;background:linear-gradient(180deg,transparent,#bcdcff);top:-5%;animation-name:caer-lluvia;animation-timing-function:linear;animation-iteration-count:infinite}
+  @keyframes caer-lluvia{from{transform:translateY(0)}to{transform:translateY(340%)}}
+  .copo{position:absolute;background:#fff;border-radius:50%;top:-5%;opacity:.9;animation-name:caer-nieve;animation-timing-function:linear;animation-iteration-count:infinite}
+  @keyframes caer-nieve{from{transform:translate(0,0)}to{transform:translate(var(--drift,15px),340%)}}
+
+  .escena-niebla{position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(220,230,240,.55) 60%,rgba(220,230,240,.75));pointer-events:none}
+  .escena-relampago{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  .escena-relampago.flash{animation:flash-rayo .6s ease-out}
+  @keyframes flash-rayo{0%{opacity:0}10%{opacity:.85}20%{opacity:.1}30%{opacity:.7}100%{opacity:0}}
+
+  .escena-overlay-info{position:absolute;left:10px;bottom:10px;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);border-radius:12px;padding:8px 12px;color:#fff}
+  .escena-temp{font-size:26px;font-weight:900;font-family:var(--mono);line-height:1}
+  .escena-desc{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;opacity:.9}
+
+  .safety-badge{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:99px;font-size:13px;font-weight:800}
+  .safety-badge.ok{background:rgba(34,197,94,.15);color:var(--green)}
+  .safety-badge.warn{background:rgba(245,184,61,.15);color:var(--gold)}
+  .safety-badge.bad{background:rgba(248,113,113,.15);color:var(--red)}
+
+  #ptr-indicator{position:fixed;top:8px;left:50%;transform:translate(-50%,-40px);opacity:0;z-index:150;width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:16px;transition:transform .25s,opacity .25s;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div id="ptr-indicator">⬇️</div>
+
+<nav class="nav-bottom" id="navbar">
+  <button class="nav-btn active" id="nav-home" onclick="navGo('home',this)"><span class="ni">🏠</span><span>Inicio</span></button>
+  <button class="nav-btn" id="nav-pronostico" onclick="navGo('pronostico',this)"><span class="ni">📊</span><span>Pronóstico</span></button>
+  <button class="nav-btn" id="nav-alertas" onclick="navGo('alertas',this)"><span class="ni">⚠️</span><span>Alertas</span></button>
+  <button class="nav-btn" id="nav-lugares" onclick="navGo('lugares',this)"><span class="ni">📍</span><span>Lugares</span></button>
+</nav>
+
+<!-- HOME -->
+<div class="page active" id="page-home">
+  <div class="header">
+    <div style="flex:1"><div class="header-title">🌤️ Clima</div><div class="header-sub" id="home-lugar">Obteniendo tu ubicación...</div></div>
+    <button class="btn-icon" onclick="abrirModalDespertador()">⏰</button>
+    <button class="btn-icon" onclick="abrirModalLugar()">📍</button>
+    <button class="btn-icon" onclick="actualizarClima()">🔄</button>
+  </div>
+  <div class="section">
+    <div class="escena-wrap" id="escena-wrap">
+      <div class="escena-cielo dia" id="escena-cielo">
+        <div class="escena-sol" id="escena-sol"></div>
+        <div class="escena-luna" id="escena-luna" style="opacity:0"></div>
+        <div id="escena-estrellas"></div>
+        <div id="escena-nubes"></div>
+        <div class="escena-lluvia" id="escena-lluvia"></div>
+        <div class="escena-nieve" id="escena-nieve"></div>
+        <div class="escena-niebla" id="escena-niebla" style="display:none"></div>
+        <div class="escena-relampago" id="escena-relampago"></div>
+        <div class="escena-suelo" id="escena-suelo">
+          <div class="escena-arbol" style="left:56%;width:16%;--dur-viento:4s;--amp-viento:2">
+            <div class="escena-arbol-copa"></div><div class="escena-arbol-tronco"></div>
+          </div>
+          <div class="escena-arbol" style="left:75%;width:12%;--dur-viento:3.6s;--amp-viento:2.4">
+            <div class="escena-arbol-copa"></div><div class="escena-arbol-tronco"></div>
+          </div>
+        </div>
+        <div class="escena-casa">
+          <div class="escena-chimenea"><div class="escena-humo" id="escena-humo"></div></div>
+          <div class="escena-casa-techo"></div>
+          <div class="escena-casa-cuerpo"><div class="escena-casa-ventana"></div><div class="escena-casa-puerta"></div></div>
+        </div>
+      </div>
+      <div class="escena-overlay-info">
+        <div class="escena-temp" id="escena-temp">—°</div>
+        <div class="escena-desc" id="escena-desc">Cargando</div>
+      </div>
+    </div>
+  </div>
+  <div class="section" style="text-align:center">
+    <span class="safety-badge ok" id="home-safety-badge">Cargando...</span>
+  </div>
+  <div class="kpi-grid" id="home-kpis"></div>
+  <div class="section"><div class="section-title">Próximas horas</div><div class="pill-row" id="home-horas"></div></div>
+  <div class="section" style="margin-top:14px"><div class="section-title">Alertas activas</div><div id="home-alertas"></div></div>
+</div>
+
+<!-- PRONOSTICO -->
+<div class="page" id="page-pronostico">
+  <div class="header"><div style="flex:1"><div class="header-title">📊 Pronóstico</div><div class="header-sub" id="pron-lugar">—</div></div></div>
+  <div class="section pill-row">
+    <button class="pill sel" id="pron-tab-temp" onclick="cambiarTabPronostico('temp')">🌡️ Temperatura</button>
+    <button class="pill" id="pron-tab-precip" onclick="cambiarTabPronostico('precip')">🌧️ Precipitación</button>
+    <button class="pill" id="pron-tab-viento" onclick="cambiarTabPronostico('viento')">💨 Viento</button>
+  </div>
+  <div class="section" style="margin-top:10px">
+    <div class="chart-canvas-wrap"><canvas id="pron-chart" width="600" height="220" style="width:100%;display:block"></canvas></div>
+  </div>
+  <div class="section"><div class="section-title">Próximas 24 horas</div><div id="pron-horas"></div></div>
+  <div class="section" style="margin-top:14px"><div class="section-title">Próximos 7 días</div><div id="pron-dias"></div></div>
+</div>
+
+<!-- ALERTAS -->
+<div class="page" id="page-alertas">
+  <div class="header"><div style="flex:1"><div class="header-title">⚠️ Alertas y seguridad</div><div class="header-sub">Calculadas con los datos reales de tu zona</div></div></div>
+  <div class="section">
+    <div class="card" style="text-align:center">
+      <div class="section-title">¿Es seguro salir / manejar?</div>
+      <div style="margin:10px 0"><span class="safety-badge ok" id="alertas-safety-badge">Cargando...</span></div>
+      <div id="alertas-safety-razones" style="font-size:12px;color:var(--text3);text-align:left"></div>
+    </div>
+  </div>
+  <div class="section"><div class="section-title">Alertas activas</div><div id="alertas-lista"></div></div>
+  <div class="section" style="margin-top:10px"><div class="card" style="font-size:11px;color:var(--text3)">Estas alertas se calculan a partir de datos meteorológicos reales (viento, temperatura, precipitación) con umbrales generales. No reemplazan a un alerta meteorológico oficial de tu país.</div></div>
+</div>
+
+<!-- LUGARES -->
+<div class="page" id="page-lugares">
+  <div class="header"><div style="flex:1"><div class="header-title">📍 Lugares</div><div class="header-sub">Guardá los lugares que quieras revisar</div></div></div>
+  <div class="section"><button class="btn-primary" onclick="abrirModalLugar()">+ Agregar lugar</button></div>
+  <div class="section" style="margin-top:6px" id="lugares-lista"></div>
+</div>
+
+<!-- MODAL: AGREGAR LUGAR -->
+<div class="modal-overlay" id="modal-lugar" onclick="if(event.target===this)cerrarModal('lugar')">
+  <div class="modal">
+    <div class="modal-title">📍 Agregar lugar</div>
+    <button class="btn-secondary" onclick="usarUbicacionActual()">📡 Usar mi ubicación actual</button>
+    <div class="field-wrap"><div class="field-label">O buscar por nombre</div><input class="input" id="lugar-buscar" placeholder="Ej: Neuquén, Buenos Aires..." onkeydown="if(event.key==='Enter')buscarLugarPorNombre()"></div>
+    <button class="btn-secondary" onclick="buscarLugarPorNombre()">Buscar</button>
+    <div id="lugar-resultados" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- MODAL: DESPERTADOR CON VOZ -->
+<div class="modal-overlay" id="modal-despertador" onclick="if(event.target===this)cerrarModal('despertador')">
+  <div class="modal">
+    <div class="modal-title">⏰ Despertador con voz</div>
+    <div class="card" style="font-size:11px;color:var(--text3);margin-bottom:14px">La app no puede sonar con el teléfono bloqueado o cerrada (ninguna web puede). Usá el despertador normal de tu teléfono para levantarte, y cuando abras esta app a la mañana te va a saludar con voz contándote el clima real.</div>
+    <div class="field-wrap"><div class="field-label">Activar saludo al abrir la app</div>
+      <button class="pill" id="desp-activo-toggle" onclick="toggleDespertadorActivo()" style="width:100%;text-align:center">Desactivado</button>
+    </div>
+    <div class="field-wrap"><div class="field-label">Tu nombre</div><input class="input" id="desp-nombre" placeholder="Ej: Fernando"></div>
+    <div class="field-wrap"><div class="field-label">Hora aproximada</div><input type="time" class="input" id="desp-hora"></div>
+    <div class="field-wrap"><div class="field-label">Voz</div><select class="input" id="desp-voz"></select></div>
+    <button class="btn-primary" onclick="guardarDespertador()">Guardar</button>
+    <button class="btn-secondary" onclick="probarSaludoAhora()">🔊 Escuchar saludo ahora</button>
+    <button class="btn-ghost" onclick="cerrarModal('despertador')">Cerrar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let _toastT;
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>el.classList.remove('show'),2600); }
+function fechaHoy(){ const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0'); }
+function fmtHora(iso){ const d=new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function fmtDiaSemana(iso){ const dias=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']; return dias[new Date(iso+'T12:00:00').getDay()]; }
+
+// ═══════════════════════════════════════════════════════════════
+// CATEGORIZACION DE CODIGOS DE CLIMA (WMO, usados por Open-Meteo)
+// ═══════════════════════════════════════════════════════════════
+function _categoriaClima(code){
+  if([95,96,99].includes(code)) return 'tormenta';
+  if([71,73,75,77,85,86].includes(code)) return 'nieve';
+  if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)) return 'lluvia';
+  if([45,48].includes(code)) return 'niebla';
+  if(code===3) return 'nublado';
+  if(code===1||code===2) return 'parcial';
+  return 'despejado';
+}
+const _DESCRIPCIONES_CLIMA={0:'Despejado',1:'Mayormente despejado',2:'Parcialmente nublado',3:'Nublado',45:'Niebla',48:'Niebla con escarcha',51:'Llovizna débil',53:'Llovizna',55:'Llovizna intensa',56:'Llovizna helada',57:'Llovizna helada intensa',61:'Lluvia débil',63:'Lluvia',65:'Lluvia intensa',66:'Lluvia helada',67:'Lluvia helada intensa',71:'Nevada débil',73:'Nevada',75:'Nevada intensa',77:'Granizo de nieve',80:'Chubascos débiles',81:'Chubascos',82:'Chubascos intensos',85:'Chubascos de nieve débiles',86:'Chubascos de nieve intensos',95:'Tormenta eléctrica',96:'Tormenta con granizo',99:'Tormenta con granizo intenso'};
+function _descripcionClima(code){ return _DESCRIPCIONES_CLIMA[code]||'—'; }
+function _iconoClima(code){
+  const cat=_categoriaClima(code);
+  return {despejado:'☀️',parcial:'⛅',nublado:'☁️',niebla:'🌫️',lluvia:'🌧️',nieve:'❄️',tormenta:'⛈️'}[cat];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DATOS REALES DE CLIMA (Open-Meteo, gratis, sin API key)
+// ═══════════════════════════════════════════════════════════════
+let CLIMA_ACTUAL=null;
+let UBICACION_ACTIVA=null; // {nombre, lat, lon}
+let LUGARES=[];
+
+async function _obtenerClima(lat, lon){
+  const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+
+    '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure'+
+    '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,visibility,uv_index'+
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,sunrise,sunset,uv_index_max'+
+    '&timezone=auto&forecast_days=7';
+  const res=await fetch(url);
+  return res.json();
+}
+async function _reverseGeocode(lat, lon){
+  try{
+    const res=await fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lon+'&format=json&accept-language=es');
+    const data=await res.json();
+    const a=data.address||{};
+    return a.city||a.town||a.village||a.suburb||a.county||data.display_name||'Mi ubicación';
+  }catch(e){ return 'Mi ubicación'; }
+}
+async function _buscarLugarGeocoding(query){
+  const res=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(query)+'&count=6&language=es&format=json');
+  const data=await res.json();
+  return (data.results||[]).map(r=>({nombre:r.name+(r.admin1?', '+r.admin1:'')+(r.country?', '+r.country:''), lat:r.latitude, lon:r.longitude}));
+}
+async function cargarClimaParaUbicacion(ubicacion){
+  UBICACION_ACTIVA=ubicacion;
+  try{
+    CLIMA_ACTUAL=await _obtenerClima(ubicacion.lat, ubicacion.lon);
+    localStorage.setItem('clima_ultima_ubicacion', JSON.stringify(ubicacion));
+    renderTodo();
+    verificarSaludoDespertador();
+  }catch(e){
+    toast('⚠️ No se pudo obtener el clima — revisá tu conexión');
+  }
+}
+async function actualizarClima(){
+  if(!UBICACION_ACTIVA) return;
+  toast('🔄 Actualizando...');
+  await cargarClimaParaUbicacion(UBICACION_ACTIVA);
+}
+async function iniciarConGeolocalizacion(){
+  const guardada=localStorage.getItem('clima_ultima_ubicacion');
+  if(guardada){
+    try{ await cargarClimaParaUbicacion(JSON.parse(guardada)); return; }catch(e){}
+  }
+  if(!navigator.geolocation){ toast('⚠️ GPS no disponible, agregá un lugar manualmente'); return; }
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const {latitude:lat, longitude:lon}=pos.coords;
+    const nombre=await _reverseGeocode(lat,lon);
+    await cargarClimaParaUbicacion({nombre, lat, lon});
+  }, ()=>{ toast('⚠️ No se pudo obtener tu ubicación — agregá un lugar manualmente'); }, {enableHighAccuracy:true, timeout:12000});
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ALERTAS DERIVADAS Y "SEGURO PARA SALIR" (umbrales sobre datos reales)
+// ═══════════════════════════════════════════════════════════════
+function calcularAlertas(clima){
+  if(!clima||!clima.current) return [];
+  const c=clima.current;
+  const alertas=[];
+  if(c.wind_speed_10m>=50) alertas.push({tipo:'viento', nivel:'bad', texto:'Viento muy fuerte ('+Math.round(c.wind_speed_10m)+' km/h) — objetos sueltos pueden volar, precaución al manejar'});
+  else if(c.wind_speed_10m>=35) alertas.push({tipo:'viento', nivel:'warn', texto:'Viento fuerte ('+Math.round(c.wind_speed_10m)+' km/h)'});
+  if(c.temperature_2m<=0) alertas.push({tipo:'helada', nivel:'bad', texto:'Riesgo de helada ('+c.temperature_2m+'°) — posible hielo en la calzada'});
+  else if(c.temperature_2m<=3) alertas.push({tipo:'helada', nivel:'warn', texto:'Temperatura cercana a cero ('+c.temperature_2m+'°)'});
+  if(c.temperature_2m>=35) alertas.push({tipo:'calor', nivel:'bad', texto:'Calor extremo ('+c.temperature_2m+'°) — hidratate y evitá el sol directo'});
+  else if(c.temperature_2m>=30) alertas.push({tipo:'calor', nivel:'warn', texto:'Día caluroso ('+c.temperature_2m+'°)'});
+  const categoria=_categoriaClima(c.weather_code);
+  if(categoria==='tormenta') alertas.push({tipo:'tormenta', nivel:'bad', texto:'Tormenta eléctrica — evitá refugiarte bajo árboles'});
+  if(categoria==='niebla') alertas.push({tipo:'niebla', nivel:'warn', texto:'Niebla — visibilidad reducida, manejá con luces bajas'});
+  if(c.precipitation>=8) alertas.push({tipo:'lluvia', nivel:'bad', texto:'Lluvia intensa — las calles pueden anegarse'});
+  return alertas;
+}
+function calcularIndiceSeguridad(clima){
+  const alertas=calcularAlertas(clima);
+  const hayBad=alertas.some(a=>a.nivel==='bad');
+  const hayWarn=alertas.some(a=>a.nivel==='warn');
+  const nivel = hayBad?'bad':hayWarn?'warn':'ok';
+  const mensaje = nivel==='bad' ? 'Evitá salir si no es necesario' : nivel==='warn' ? 'Podés salir, con precaución' : 'Buen momento para salir';
+  return {nivel, mensaje, razones:alertas.map(a=>a.texto)};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ESCENA ANIMADA (se dibuja según el clima real)
+// ═══════════════════════════════════════════════════════════════
+function _duracionViento(kmh){ return Math.max(1.2, 5-(kmh||0)/12); }
+function _amplitudViento(kmh){ return Math.min(12, 1+(kmh||0)/6); }
+function _intensidadLluvia(mm){ return Math.max(6, Math.min(40, Math.round((mm||1)*12))); }
+function _intensidadNieve(mm){ return Math.max(8, Math.min(30, Math.round((mm||1)*10))); }
+
+function renderNubes(cantidad){
+  const cont=document.getElementById('escena-nubes');
+  if(!cont) return;
+  let html='';
+  for(let i=0;i<cantidad;i++){
+    const top=8+Math.random()*22, w=18+Math.random()*14, dur=30+Math.random()*30, delay=-Math.random()*dur;
+    html+='<div class="escena-nube" style="top:'+top+'%;left:0;width:'+w+'%;height:'+(w*0.4)+'%;animation:derivar '+dur+'s linear infinite;animation-delay:'+delay+'s"></div>';
+  }
+  cont.innerHTML=html;
+}
+function renderLluvia(cantidad){
+  const cont=document.getElementById('escena-lluvia');
+  if(!cont) return;
+  if(!cantidad){ cont.innerHTML=''; return; }
+  let html='';
+  for(let i=0;i<cantidad;i++){
+    const left=Math.random()*100, dur=0.5+Math.random()*0.5, delay=-Math.random()*dur, h=10+Math.random()*10;
+    html+='<div class="gota" style="left:'+left+'%;height:'+h+'px;animation-duration:'+dur+'s;animation-delay:'+delay+'s"></div>';
+  }
+  cont.innerHTML=html;
+}
+function renderNieve(cantidad){
+  const cont=document.getElementById('escena-nieve');
+  if(!cont) return;
+  if(!cantidad){ cont.innerHTML=''; return; }
+  let html='';
+  for(let i=0;i<cantidad;i++){
+    const left=Math.random()*100, dur=4+Math.random()*4, delay=-Math.random()*dur, size=2+Math.random()*3, drift=(Math.random()*30-15)+'px';
+    html+='<div class="copo" style="left:'+left+'%;width:'+size+'px;height:'+size+'px;--drift:'+drift+';animation-duration:'+dur+'s;animation-delay:'+delay+'s"></div>';
+  }
+  cont.innerHTML=html;
+}
+let _relampagoInterval=null;
+function iniciarRelampagos(){
+  if(_relampagoInterval) return;
+  _relampagoInterval=setInterval(()=>{
+    const el=document.getElementById('escena-relampago');
+    if(!el) return;
+    el.classList.remove('flash'); void 0; el.classList.add('flash');
+  }, 4000+Math.random()*4000);
+}
+function detenerRelampagos(){ if(_relampagoInterval){ clearInterval(_relampagoInterval); _relampagoInterval=null; } }
+
+function aplicarEscena(){
+  if(!CLIMA_ACTUAL || !CLIMA_ACTUAL.current) return;
+  const c=CLIMA_ACTUAL.current;
+  const categoria=_categoriaClima(c.weather_code);
+  const esDia=c.is_day===1;
+  const cieloEl=document.getElementById('escena-cielo');
+  if(cieloEl){
+    cieloEl.className='escena-cielo';
+    if(categoria==='tormenta') cieloEl.classList.add('tormenta');
+    else if(['nublado','lluvia','niebla','nieve'].includes(categoria)){ cieloEl.classList.add('nublado'); if(!esDia) cieloEl.classList.add('noche'); }
+    else cieloEl.classList.add(esDia?'dia':'noche');
+  }
+  const solEl=document.getElementById('escena-sol');
+  if(solEl) solEl.style.opacity = (esDia && (categoria==='despejado'||categoria==='parcial')) ? '1':'0';
+  const lunaEl=document.getElementById('escena-luna');
+  if(lunaEl) lunaEl.style.opacity = (!esDia && (categoria==='despejado'||categoria==='parcial')) ? '1':'0';
+
+  renderNubes(categoria==='despejado'?0:categoria==='parcial'?2:5);
+  renderLluvia(['lluvia','tormenta'].includes(categoria) ? _intensidadLluvia(c.precipitation) : 0);
+  renderNieve(categoria==='nieve' ? _intensidadNieve(c.precipitation) : 0);
+
+  const nieblaEl=document.getElementById('escena-niebla');
+  if(nieblaEl) nieblaEl.style.display = categoria==='niebla' ? 'block':'none';
+
+  const dur=_duracionViento(c.wind_speed_10m), amp=_amplitudViento(c.wind_speed_10m);
+  document.querySelectorAll('.escena-arbol').forEach(a=>{ a.style.setProperty('--dur-viento', dur+'s'); a.style.setProperty('--amp-viento', amp); });
+
+  const sueloEl=document.getElementById('escena-suelo');
+  if(sueloEl){
+    sueloEl.className='escena-suelo';
+    if(categoria==='nieve') sueloEl.classList.add('nevado');
+    else if(c.temperature_2m<=0) sueloEl.classList.add('helado');
+  }
+
+  if(categoria==='tormenta') iniciarRelampagos(); else detenerRelampagos();
+
+  const tempEl=document.getElementById('escena-temp'); if(tempEl) tempEl.textContent=Math.round(c.temperature_2m)+'°';
+  const descEl=document.getElementById('escena-desc'); if(descEl) descEl.textContent=_descripcionClima(c.weather_code);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVEGACION + HISTORY API
+// ═══════════════════════════════════════════════════════════════
+let _pagActual='home';
+let _poppingState=false;
+const PAGE_RENDER_FN={ home:renderHome, pronostico:renderPronostico, alertas:renderAlertas, lugares:renderLugares };
+function navGo(page,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const target=document.getElementById('page-'+page);
+  if(target) target.classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  const navBtn=btn||document.getElementById('nav-'+page);
+  if(navBtn && navBtn.classList) navBtn.classList.add('active');
+  _pagActual=page;
+  const fn=PAGE_RENDER_FN[page];
+  if(fn) fn();
+  window.scrollTo(0,0);
+  if(!_poppingState && page!=='home') history.pushState({page},'','');
+}
+function abrirModal(id){ document.getElementById('modal-'+id).classList.add('open'); if(!_poppingState) history.pushState({modal:id},'',''); }
+function cerrarModal(id){ document.getElementById('modal-'+id).classList.remove('open'); if(!_poppingState) history.back(); }
+window.addEventListener('popstate', e=>{
+  _poppingState=true;
+  const openModal=document.querySelector('.modal-overlay.open');
+  if(openModal){ openModal.classList.remove('open'); }
+  else if(!e.state || e.state.page==='home'){ if(_pagActual!=='home') navGo('home', document.getElementById('nav-home')); }
+  else if(e.state.page && e.state.page!==_pagActual){ navGo(e.state.page, document.getElementById('nav-'+e.state.page)); }
+  _poppingState=false;
+});
+
+function renderTodo(){
+  const fn=PAGE_RENDER_FN[_pagActual];
+  if(fn) fn();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HOME
+// ═══════════════════════════════════════════════════════════════
+function renderHome(){
+  if(!CLIMA_ACTUAL){ return; }
+  document.getElementById('home-lugar').textContent=UBICACION_ACTIVA?UBICACION_ACTIVA.nombre:'—';
+  aplicarEscena();
+  const seg=calcularIndiceSeguridad(CLIMA_ACTUAL);
+  const badge=document.getElementById('home-safety-badge');
+  badge.className='safety-badge '+seg.nivel;
+  badge.textContent=seg.mensaje;
+
+  const c=CLIMA_ACTUAL.current;
+  document.getElementById('home-kpis').innerHTML=
+    '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.apparent_temperature)+'°</div><div class="kpi-lbl">Sensación térmica</div></div>'+
+    '<div class="kpi-box"><div class="kpi-val">'+c.relative_humidity_2m+'%</div><div class="kpi-lbl">Humedad</div></div>'+
+    '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_speed_10m)+' km/h</div><div class="kpi-lbl">Viento</div></div>'+
+    '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_gusts_10m||0)+' km/h</div><div class="kpi-lbl">Ráfagas</div></div>';
+
+  const horas=(CLIMA_ACTUAL.hourly.time||[]).map((t,i)=>({t, temp:CLIMA_ACTUAL.hourly.temperature_2m[i], code:CLIMA_ACTUAL.hourly.weather_code[i]}))
+    .filter(h=>new Date(h.t).getTime()>=Date.now()-3600000).slice(0,8);
+  document.getElementById('home-horas').innerHTML=horas.map(h=>
+    '<div class="pill" style="text-align:center;display:flex;flex-direction:column;gap:2px;padding:8px 12px">'+
+      '<div style="font-size:10px;color:var(--text3)">'+fmtHora(h.t)+'</div>'+
+      '<div style="font-size:16px">'+_iconoClima(h.code)+'</div>'+
+      '<div style="font-weight:800">'+Math.round(h.temp)+'°</div>'+
+    '</div>'
+  ).join('');
+
+  const alertas=calcularAlertas(CLIMA_ACTUAL);
+  document.getElementById('home-alertas').innerHTML=alertas.length ? alertas.map(alertaRowHtml).join('') : '<div class="empty" style="padding:16px 0"><div class="empty-sub">Sin alertas activas</div></div>';
+}
+function alertaRowHtml(a){
+  const icono={viento:'💨',helada:'🥶',calor:'🥵',tormenta:'⛈️',niebla:'🌫️',lluvia:'🌧️'}[a.tipo]||'⚠️';
+  return '<div class="row-item static"><div class="row-icon" style="background:rgba(59,158,255,.15)">'+icono+'</div><div class="row-main"><div class="row-title">'+esc(a.texto)+'</div></div>'+
+    '<div class="row-amt"><div class="row-amt-val '+a.nivel+'">●</div></div></div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PRONOSTICO
+// ═══════════════════════════════════════════════════════════════
+let _tabPronostico='temp';
+function cambiarTabPronostico(t){
+  _tabPronostico=t;
+  ['temp','precip','viento'].forEach(x=>document.getElementById('pron-tab-'+x).classList.toggle('sel',x===t));
+  dibujarChartPronostico();
+}
+function dibujarChartPronostico(){
+  const canvas=document.getElementById('pron-chart');
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(!CLIMA_ACTUAL) return;
+  const horas=(CLIMA_ACTUAL.hourly.time||[]).slice(0,24);
+  let valores;
+  if(_tabPronostico==='temp') valores=CLIMA_ACTUAL.hourly.temperature_2m.slice(0,24);
+  else if(_tabPronostico==='precip') valores=CLIMA_ACTUAL.hourly.precipitation.slice(0,24);
+  else valores=CLIMA_ACTUAL.hourly.wind_speed_10m.slice(0,24);
+  if(!valores.length) return;
+  const min=Math.min(...valores,0), max=Math.max(...valores,1), rango=(max-min)||1;
+  const pad=24, w=canvas.width-2*pad, h=canvas.height-2*pad;
+  ctx.strokeStyle='#3b9eff'; ctx.fillStyle='rgba(59,158,255,.5)'; ctx.lineWidth=2.5; ctx.lineJoin='round';
+  ctx.beginPath();
+  valores.forEach((v,i)=>{
+    const x=pad+(valores.length>1?(i/(valores.length-1))*w:w/2);
+    const y=pad+h-((v-min)/rango)*h;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+}
+function renderPronostico(){
+  if(!CLIMA_ACTUAL) return;
+  document.getElementById('pron-lugar').textContent=UBICACION_ACTIVA?UBICACION_ACTIVA.nombre:'—';
+  dibujarChartPronostico();
+  const horas=(CLIMA_ACTUAL.hourly.time||[]).map((t,i)=>({t, temp:CLIMA_ACTUAL.hourly.temperature_2m[i], code:CLIMA_ACTUAL.hourly.weather_code[i], precipProb:CLIMA_ACTUAL.hourly.precipitation_probability[i], viento:CLIMA_ACTUAL.hourly.wind_speed_10m[i]}))
+    .filter(h=>new Date(h.t).getTime()>=Date.now()-3600000).slice(0,24);
+  document.getElementById('pron-horas').innerHTML=horas.map(h=>
+    '<div class="row-item static"><div class="row-icon" style="background:rgba(59,158,255,.15)">'+_iconoClima(h.code)+'</div>'+
+    '<div class="row-main"><div class="row-title">'+fmtHora(h.t)+'</div><div class="row-sub">'+_descripcionClima(h.code)+' · 💧'+h.precipProb+'% · 💨'+Math.round(h.viento)+'km/h</div></div>'+
+    '<div class="row-amt"><div class="row-amt-val">'+Math.round(h.temp)+'°</div></div></div>'
+  ).join('');
+  const dias=(CLIMA_ACTUAL.daily.time||[]).map((t,i)=>({t, max:CLIMA_ACTUAL.daily.temperature_2m_max[i], min:CLIMA_ACTUAL.daily.temperature_2m_min[i], code:CLIMA_ACTUAL.daily.weather_code[i], precip:CLIMA_ACTUAL.daily.precipitation_sum[i]}));
+  document.getElementById('pron-dias').innerHTML=dias.map(d=>
+    '<div class="row-item static"><div class="row-icon" style="background:rgba(59,158,255,.15)">'+_iconoClima(d.code)+'</div>'+
+    '<div class="row-main"><div class="row-title">'+fmtDiaSemana(d.t)+'</div><div class="row-sub">'+_descripcionClima(d.code)+(d.precip>0?' · 💧'+d.precip+'mm':'')+'</div></div>'+
+    '<div class="row-amt"><div class="row-amt-val">'+Math.round(d.max)+'° / '+Math.round(d.min)+'°</div></div></div>'
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ALERTAS
+// ═══════════════════════════════════════════════════════════════
+function renderAlertas(){
+  if(!CLIMA_ACTUAL) return;
+  const seg=calcularIndiceSeguridad(CLIMA_ACTUAL);
+  const badge=document.getElementById('alertas-safety-badge');
+  badge.className='safety-badge '+seg.nivel;
+  badge.textContent=seg.mensaje;
+  document.getElementById('alertas-safety-razones').innerHTML = seg.razones.length ? '• '+seg.razones.map(esc).join('<br>• ') : 'No hay factores de riesgo detectados ahora mismo.';
+  const alertas=calcularAlertas(CLIMA_ACTUAL);
+  document.getElementById('alertas-lista').innerHTML=alertas.length ? alertas.map(alertaRowHtml).join('') : '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin alertas activas</div></div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LUGARES
+// ═══════════════════════════════════════════════════════════════
+function _cargarLugares(){ try{ LUGARES=JSON.parse(localStorage.getItem('clima_lugares')||'[]'); }catch(e){ LUGARES=[]; } }
+function _guardarLugares(){ localStorage.setItem('clima_lugares', JSON.stringify(LUGARES)); }
+function renderLugares(){
+  document.getElementById('lugares-lista').innerHTML = LUGARES.length ? LUGARES.map(l=>
+    '<div class="row-item" onclick="seleccionarLugar(\''+l.id+'\')"><div class="row-icon" style="background:rgba(59,158,255,.15)">📍</div><div class="row-main"><div class="row-title">'+esc(l.nombre)+'</div></div>'+
+    '<button class="row-fav" style="font-size:18px" onclick="event.stopPropagation();borrarLugar(\''+l.id+'\')">🗑</button></div>'
+  ).join('') : '<div class="empty"><div class="empty-icon">📍</div><div class="empty-text">Sin lugares guardados</div><div class="empty-sub">Agregá tu casa, trabajo, o cualquier ciudad</div></div>';
+}
+async function seleccionarLugar(id){
+  const l=LUGARES.find(x=>x.id===id);
+  if(!l) return;
+  await cargarClimaParaUbicacion({nombre:l.nombre, lat:l.lat, lon:l.lon});
+  navGo('home', document.getElementById('nav-home'));
+}
+function borrarLugar(id){
+  LUGARES=LUGARES.filter(l=>l.id!==id);
+  _guardarLugares();
+  renderLugares();
+}
+function abrirModalLugar(){
+  document.getElementById('lugar-buscar').value='';
+  document.getElementById('lugar-resultados').innerHTML='';
+  abrirModal('lugar');
+}
+async function usarUbicacionActual(){
+  if(!navigator.geolocation){ toast('⚠️ GPS no disponible'); return; }
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const {latitude:lat, longitude:lon}=pos.coords;
+    const nombre=await _reverseGeocode(lat,lon);
+    await _agregarLugar(nombre, lat, lon);
+  }, ()=>{ toast('⚠️ No se pudo obtener tu ubicación'); }, {enableHighAccuracy:true, timeout:12000});
+}
+async function buscarLugarPorNombre(){
+  const q=(document.getElementById('lugar-buscar').value||'').trim();
+  if(!q) return;
+  const el=document.getElementById('lugar-resultados');
+  el.innerHTML='<div class="empty" style="padding:16px 0"><div class="empty-sub">Buscando...</div></div>';
+  try{
+    const resultados=await _buscarLugarGeocoding(q);
+    el.innerHTML = resultados.length ? resultados.map((r,i)=>
+      '<div class="row-item" onclick="_elegirResultadoLugar('+i+')"><div class="row-icon" style="background:rgba(59,158,255,.15)">📍</div><div class="row-main"><div class="row-title">'+esc(r.nombre)+'</div></div></div>'
+    ).join('') : '<div class="empty"><div class="empty-sub">Sin resultados</div></div>';
+    window._resultadosLugarActuales=resultados;
+  }catch(e){ el.innerHTML='<div class="empty"><div class="empty-sub">No se pudo buscar</div></div>'; }
+}
+async function _elegirResultadoLugar(i){
+  const r=window._resultadosLugarActuales[i];
+  if(!r) return;
+  await _agregarLugar(r.nombre, r.lat, r.lon);
+}
+async function _agregarLugar(nombre, lat, lon){
+  const lugar={id:uid(), nombre, lat, lon};
+  LUGARES.push(lugar);
+  _guardarLugares();
+  cerrarModal('lugar');
+  await cargarClimaParaUbicacion(lugar);
+  renderLugares();
+  toast('📍 '+nombre);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DESPERTADOR CON VOZ (Web Speech API — sin costo, voz del sistema)
+// ═══════════════════════════════════════════════════════════════
+let VOCES_DISPONIBLES=[];
+function cargarVoces(){
+  if(!('speechSynthesis' in window)) return;
+  VOCES_DISPONIBLES=window.speechSynthesis.getVoices().filter(v=>v.lang && v.lang.toLowerCase().startsWith('es'));
+  const sel=document.getElementById('desp-voz');
+  if(sel && VOCES_DISPONIBLES.length){
+    sel.innerHTML=VOCES_DISPONIBLES.map(v=>'<option value="'+esc(v.name)+'">'+esc(v.name)+' ('+v.lang+')</option>').join('');
+  }
+}
+if(typeof window!=='undefined' && 'speechSynthesis' in window){
+  window.speechSynthesis.onvoiceschanged=cargarVoces;
+  cargarVoces();
+}
+function generarMensajeDespertador(nombre, clima){
+  const c=clima.current;
+  const temp=Math.round(c.temperature_2m);
+  const categoria=_categoriaClima(c.weather_code);
+  let saludo='Hola'+(nombre?' '+nombre:'')+', ¡buen día!';
+  let frase;
+  if(temp<=0) frase='Hace '+temp+' grados, bajo cero. Abrigate bien antes de salir.';
+  else if(temp<=8) frase='Hace frío, '+temp+' grados. Llevá abrigo.';
+  else if(temp>=32) frase='Va a hacer mucho calor hoy, '+temp+' grados. Tomá agua seguido.';
+  else frase='Hoy tenemos '+temp+' grados.';
+  let extra='';
+  if(categoria==='lluvia') extra=' Va a llover, llevá paraguas.';
+  else if(categoria==='tormenta') extra=' Hay tormenta eléctrica, tené cuidado si salís.';
+  else if(categoria==='nieve') extra=' Está nevando.';
+  else if(categoria==='niebla') extra=' Hay niebla, manejá con cuidado.';
+  else if(categoria==='despejado') extra=' Está despejado.';
+  const vientoTxt = c.wind_speed_10m>=35 ? ' Hay bastante viento, tené cuidado.' : '';
+  return saludo+' '+frase+extra+vientoTxt;
+}
+function hablarSaludo(texto){
+  if(!('speechSynthesis' in window)){ toast('Este dispositivo no soporta voz'); return; }
+  const utter=new SpeechSynthesisUtterance(texto);
+  const config=JSON.parse(localStorage.getItem('clima_despertador')||'null');
+  const voz = config && config.voz ? VOCES_DISPONIBLES.find(v=>v.name===config.voz) : VOCES_DISPONIBLES[0];
+  if(voz) utter.voice=voz;
+  utter.lang='es-ES'; utter.rate=0.95; utter.pitch=1.05;
+  window.speechSynthesis.speak(utter);
+}
+let _ambienteCtx=null, _ambienteNodos=[];
+function iniciarMusicaSuave(){
+  if(_ambienteCtx) return;
+  try{
+    _ambienteCtx=new (window.AudioContext||window.webkitAudioContext)();
+    [261.63,329.63,392.00].forEach(freq=>{
+      const osc=_ambienteCtx.createOscillator();
+      osc.type='sine'; osc.frequency.value=freq;
+      const gain=_ambienteCtx.createGain();
+      gain.gain.value=0;
+      gain.gain.linearRampToValueAtTime(0.035, _ambienteCtx.currentTime+2);
+      osc.connect(gain); gain.connect(_ambienteCtx.destination);
+      osc.start();
+      _ambienteNodos.push({osc,gain});
+    });
+  }catch(e){ console.warn('No se pudo iniciar musica suave', e); }
+}
+function detenerMusicaSuave(){
+  if(!_ambienteCtx) return;
+  _ambienteNodos.forEach(({osc,gain})=>{
+    gain.gain.linearRampToValueAtTime(0, _ambienteCtx.currentTime+1.5);
+    osc.stop(_ambienteCtx.currentTime+1.6);
+  });
+  const ctxACerrar=_ambienteCtx;
+  _ambienteCtx=null; _ambienteNodos=[];
+  setTimeout(()=>{ ctxACerrar.close(); },1700);
+}
+function _yaSaludoHoy(){ return localStorage.getItem('clima_ultimo_saludo')===fechaHoy(); }
+function verificarSaludoDespertador(){
+  const config=JSON.parse(localStorage.getItem('clima_despertador')||'null');
+  if(!config || !config.activo || !config.hora) return;
+  if(_yaSaludoHoy()) return;
+  const ahora=new Date();
+  const [hConfig,mConfig]=config.hora.split(':').map(Number);
+  const minutosConfig=hConfig*60+mConfig;
+  const minutosActual=ahora.getHours()*60+ahora.getMinutes();
+  if(minutosActual>=minutosConfig && minutosActual<=minutosConfig+90) ejecutarSaludoDespertador();
+}
+function ejecutarSaludoDespertador(){
+  if(!CLIMA_ACTUAL) return;
+  const config=JSON.parse(localStorage.getItem('clima_despertador')||'null');
+  const mensaje=generarMensajeDespertador(config?config.nombre:'', CLIMA_ACTUAL);
+  iniciarMusicaSuave();
+  setTimeout(()=>{ hablarSaludo(mensaje); }, 900);
+  localStorage.setItem('clima_ultimo_saludo', fechaHoy());
+  setTimeout(()=>{ detenerMusicaSuave(); }, Math.max(9000, mensaje.length*90));
+  return mensaje;
+}
+function probarSaludoAhora(){
+  if(!CLIMA_ACTUAL){ toast('Esperá a que cargue el clima'); return; }
+  ejecutarSaludoDespertador();
+}
+function abrirModalDespertador(){
+  const config=JSON.parse(localStorage.getItem('clima_despertador')||'null')||{activo:false,nombre:'',hora:'07:00',voz:''};
+  document.getElementById('desp-activo-toggle').textContent = config.activo?'Activado':'Desactivado';
+  document.getElementById('desp-activo-toggle').classList.toggle('sel', config.activo);
+  document.getElementById('desp-nombre').value=config.nombre||'';
+  document.getElementById('desp-hora').value=config.hora||'07:00';
+  cargarVoces();
+  if(config.voz) document.getElementById('desp-voz').value=config.voz;
+  abrirModal('despertador');
+}
+function toggleDespertadorActivo(){
+  const btn=document.getElementById('desp-activo-toggle');
+  const activo=!btn.classList.contains('sel');
+  btn.classList.toggle('sel', activo);
+  btn.textContent = activo?'Activado':'Desactivado';
+}
+function guardarDespertador(){
+  const activo=document.getElementById('desp-activo-toggle').classList.contains('sel');
+  const nombre=(document.getElementById('desp-nombre').value||'').trim();
+  const hora=document.getElementById('desp-hora').value||'07:00';
+  const voz=document.getElementById('desp-voz').value||'';
+  localStorage.setItem('clima_despertador', JSON.stringify({activo,nombre,hora,voz}));
+  cerrarModal('despertador');
+  toast('✅ Guardado');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ARRANQUE
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', ()=>{
+  _cargarLugares();
+  iniciarConGeolocalizacion();
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+});
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden) verificarSaludoDespertador();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PULL TO REFRESH
+// ═══════════════════════════════════════════════════════════════
+const PTR_THRESHOLD=70, PTR_MAX=110;
+let _ptrStartY=null, _ptrPulling=false;
+function _ptrEl(){ return document.getElementById('ptr-indicator'); }
+document.addEventListener('touchstart', e=>{
+  if(document.querySelector('.modal-overlay.open')){ _ptrStartY=null; return; }
+  if((document.scrollingElement||document.documentElement).scrollTop>0){ _ptrStartY=null; return; }
+  _ptrStartY=e.touches[0].clientY; _ptrPulling=false;
+}, {passive:true});
+document.addEventListener('touchmove', e=>{
+  if(_ptrStartY==null) return;
+  if((document.scrollingElement||document.documentElement).scrollTop>0){ _ptrStartY=null; return; }
+  const dy=e.touches[0].clientY-_ptrStartY;
+  if(dy<=0) return;
+  _ptrPulling=true;
+  const dist=Math.min(dy*0.5,PTR_MAX);
+  const el=_ptrEl();
+  el.style.transition='none';
+  el.style.transform='translate(-50%,'+(dist-40)+'px)';
+  el.style.opacity=String(Math.min(dist/PTR_THRESHOLD,1));
+  el.textContent=dist>=PTR_THRESHOLD?'⬆️':'⬇️';
+  if(e.cancelable) e.preventDefault();
+}, {passive:false});
+document.addEventListener('touchend', ()=>{
+  if(!_ptrPulling){ _ptrStartY=null; return; }
+  const el=_ptrEl();
+  el.style.transition='transform .25s,opacity .25s';
+  const m=/-?\d+\.?\d*/.exec(el.style.transform.split(',')[1]||'');
+  const dist=(m?parseFloat(m[0]):-40)+40;
+  if(dist>=PTR_THRESHOLD){
+    el.textContent='⏳';
+    setTimeout(()=>{ actualizarClima(); el.style.transform='translate(-50%,-40px)'; el.style.opacity='0'; },400);
+  }else{ el.style.transform='translate(-50%,-40px)'; el.style.opacity='0'; }
+  _ptrStartY=null; _ptrPulling=false;
+}, {passive:true});
+</script>
+</body>
+</html>
