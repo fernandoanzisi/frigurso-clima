@@ -116,9 +116,24 @@
   @keyframes balanceo{0%,100%{transform:rotate(calc(-1deg * var(--amp-viento,2)))}50%{transform:rotate(calc(1deg * var(--amp-viento,2)))}}
 
   .escena-niebla{position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(220,230,240,.55) 60%,rgba(220,230,240,.75));pointer-events:none}
-  .escena-relampago{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
-  .escena-relampago.flash{animation:flash-rayo .6s ease-out}
-  @keyframes flash-rayo{0%{opacity:0}10%{opacity:.85}20%{opacity:.1}30%{opacity:.7}100%{opacity:0}}
+  .escena-relampago{position:absolute;inset:0;background:radial-gradient(circle,#fff 0%,#eaf2ff 70%,#d8e8ff 100%);opacity:0;pointer-events:none}
+  .escena-relampago.flash{animation:flash-rayo .55s cubic-bezier(.2,.9,.3,1)}
+  .escena-relampago.flash2{animation:flash-rayo2 .35s ease-out}
+  @keyframes flash-rayo{0%{opacity:0}6%{opacity:1}14%{opacity:.15}22%{opacity:.9}35%{opacity:.05}100%{opacity:0}}
+  @keyframes flash-rayo2{0%{opacity:0}15%{opacity:.75}35%{opacity:.05}100%{opacity:0}}
+  .escena-wrap.temblando{animation:temblor-rayo .4s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes temblor-rayo{
+    10%{transform:translate(-2px,-1px) rotate(-.3deg)}
+    20%{transform:translate(3px,1px) rotate(.3deg)}
+    30%{transform:translate(-3px,-1px) rotate(0deg)}
+    40%{transform:translate(3px,2px) rotate(.3deg)}
+    50%{transform:translate(-2px,-2px) rotate(-.3deg)}
+    60%{transform:translate(2px,1px) rotate(0deg)}
+    70%{transform:translate(-2px,-1px) rotate(.3deg)}
+    80%{transform:translate(2px,1px) rotate(-.3deg)}
+    90%{transform:translate(-1px,0) rotate(0deg)}
+    100%{transform:translate(0,0) rotate(0deg)}
+  }
 
   .escena-overlay-info{position:absolute;left:10px;bottom:10px;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);border-radius:12px;padding:8px 12px;color:#fff}
   .escena-temp{font-size:26px;font-weight:900;font-family:var(--mono);line-height:1}
@@ -408,11 +423,29 @@ function _crearParticulasNieve(cantidad, ancho, alto){
   for(let i=0;i<cantidad;i++) arr.push({ x:Math.random()*ancho, y:Math.random()*alto, radio:1.5+Math.random()*2.8, vel:0.6+Math.random()*1.1, fase:Math.random()*Math.PI*2, ampDrift:8+Math.random()*14, opacidad:0.55+Math.random()*0.4 });
   return arr;
 }
-function _generarBoltPuntos(ancho,alto){
-  const puntos=[]; let x=ancho*(0.3+Math.random()*0.4), y=0;
-  puntos.push([x,y]);
-  while(y<alto*0.7){ x+=(Math.random()-0.5)*ancho*0.08; y+=alto*0.09+Math.random()*alto*0.05; puntos.push([x,y]); }
+function _generarSegmentoRayo(xInicio, yInicio, alturaObjetivo, ancho, pasoY){
+  const puntos=[[xInicio,yInicio]];
+  let x=xInicio, y=yInicio;
+  while(y<alturaObjetivo){
+    x+=(Math.random()-0.5)*ancho*0.09;
+    y+=pasoY*(0.7+Math.random()*0.6);
+    puntos.push([x,y]);
+  }
   return puntos;
+}
+function _generarBoltPuntos(ancho,alto){
+  const xInicio=ancho*(0.3+Math.random()*0.4);
+  const pasoY=alto*0.08;
+  const tronco=_generarSegmentoRayo(xInicio, 0, alto*0.72, ancho, pasoY);
+  // 1 a 3 ramas secundarias que arrancan en un punto random del tronco y son mas cortas/delgadas
+  const ramas=[];
+  const cantRamas=1+Math.floor(Math.random()*3);
+  for(let i=0;i<cantRamas;i++){
+    const idxOrigen=1+Math.floor(Math.random()*(tronco.length-2));
+    const [ox,oy]=tronco[idxOrigen];
+    ramas.push(_generarSegmentoRayo(ox, oy, Math.min(alto*0.72, oy+alto*(0.15+Math.random()*0.25)), ancho*0.7, pasoY*0.8));
+  }
+  return {tronco, ramas};
 }
 
 function _dibujarNubes(ctx, ancho, alto, factorViento){
@@ -497,13 +530,24 @@ function _dibujarNieve(ctx, ancho, alto){
   });
   ctx.restore();
 }
-function _dibujarRayoBolt(ctx, puntos){
-  ctx.save();
-  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2.5;
-  ctx.shadowColor='#dbe9ff'; ctx.shadowBlur=8;
+function _trazarCamino(ctx, puntos){
   ctx.beginPath();
   puntos.forEach(([x,y],i)=>{ if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
   ctx.stroke();
+}
+function _dibujarRayoBolt(ctx, bolt){
+  const {tronco, ramas} = bolt;
+  ctx.save();
+  // halo ancho y difuso detras, para sensacion de "electricidad" real
+  ctx.strokeStyle='rgba(200,225,255,.5)'; ctx.lineWidth=10; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.shadowColor='#eaf2ff'; ctx.shadowBlur=25;
+  _trazarCamino(ctx, tronco);
+  // nucleo brillante y nitido del tronco principal
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=3.2; ctx.shadowBlur=14;
+  _trazarCamino(ctx, tronco);
+  // ramas secundarias, mas finas
+  ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=1.6; ctx.shadowBlur=10;
+  (ramas||[]).forEach(rama=>_trazarCamino(ctx, rama));
   ctx.restore();
 }
 
@@ -566,14 +610,25 @@ function _renderEstrellas(mostrar){
   cont.innerHTML=html;
 }
 let _relampagoInterval=null;
+function _dispararUnRayo(){
+  const el=document.getElementById('escena-relampago');
+  const wrap=document.getElementById('escena-wrap');
+  const dobleFlash=Math.random()<0.45;
+  if(el){ el.classList.remove('flash'); el.classList.remove('flash2'); void 0; el.classList.add('flash'); }
+  if(wrap){ wrap.classList.remove('temblando'); void 0; wrap.classList.add('temblando'); }
+  _boltPuntos=null;
+  _boltActivoHasta=((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now())+240;
+  if(dobleFlash){
+    setTimeout(()=>{
+      if(el){ el.classList.remove('flash'); el.classList.add('flash2'); }
+      _boltPuntos=null;
+      _boltActivoHasta=((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now())+180;
+    }, 260);
+  }
+}
 function iniciarRelampagos(){
   if(_relampagoInterval) return;
-  _relampagoInterval=setInterval(()=>{
-    const el=document.getElementById('escena-relampago');
-    if(el){ el.classList.remove('flash'); void 0; el.classList.add('flash'); }
-    _boltPuntos=null;
-    _boltActivoHasta=((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now())+220;
-  }, 4000+Math.random()*4000);
+  _relampagoInterval=setInterval(_dispararUnRayo, 4000+Math.random()*4000);
 }
 function detenerRelampagos(){ if(_relampagoInterval){ clearInterval(_relampagoInterval); _relampagoInterval=null; } }
 
