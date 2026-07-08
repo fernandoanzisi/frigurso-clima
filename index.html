@@ -89,37 +89,31 @@
   .escena-cielo.nublado.noche{background:linear-gradient(180deg,#0c111a 0%,#232f3d 60%,#333f4d 100%)}
   .escena-cielo.tormenta{background:linear-gradient(180deg,#20232b 0%,#3a3f49 60%,#4d525c 100%)}
 
-  .escena-sol{position:absolute;width:15%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#fff3b0 0%,#ffce54 60%,#ffb020 100%);box-shadow:0 0 40px 10px rgba(255,206,84,.55);top:8%;right:14%;transition:opacity .8s}
-  .escena-luna{position:absolute;width:11%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fdfdfd,#c9d3e0 70%,#aab6c9);box-shadow:0 0 26px 6px rgba(255,255,255,.35);top:8%;right:16%;transition:opacity .8s}
   .escena-estrella{position:absolute;width:3px;height:3px;background:#fff;border-radius:50%;opacity:.8;animation:centellar 3s ease-in-out infinite}
   @keyframes centellar{0%,100%{opacity:.3}50%{opacity:1}}
 
-  .escena-nube{position:absolute;background:#fff;border-radius:50px;opacity:.92;filter:blur(.3px)}
-  .escena-nube::before,.escena-nube::after{content:'';position:absolute;background:inherit;border-radius:50%}
-  @keyframes derivar{from{transform:translateX(-10%)}to{transform:translateX(120%)}}
+  .escena-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 
-  .escena-suelo{position:absolute;left:0;right:0;bottom:0;height:26%;background:linear-gradient(180deg,#3a7d4f 0%,#2b5c3a 100%)}
+  .escena-suelo{position:absolute;left:0;right:0;bottom:0;height:26%;background:linear-gradient(180deg,#3a7d4f 0%,#2b5c3a 100%);box-shadow:inset 0 8px 14px -8px rgba(0,0,0,.35);transition:background 1s ease}
   .escena-suelo.helado{background:linear-gradient(180deg,#c7d9e6 0%,#9fb8cc 100%)}
   .escena-suelo.nevado{background:linear-gradient(180deg,#eef4fb 0%,#d3e2f0 100%)}
 
-  .escena-casa{position:absolute;bottom:18%;left:8%;width:30%;max-width:150px}
-  .escena-casa-cuerpo{background:#8a5a3c;height:60%;border-radius:2px 2px 0 0;position:relative}
-  .escena-casa-techo{width:0;height:0;border-left:calc(50% + 8px) solid transparent;border-right:calc(50% + 8px) solid transparent;border-bottom:38px solid #5c3a26;margin:0 -8px}
-  .escena-casa-ventana{position:absolute;width:22%;height:28%;background:#ffe27a;top:20%;left:15%;border-radius:2px;box-shadow:0 0 8px rgba(255,226,122,.6)}
-  .escena-casa-puerta{position:absolute;width:24%;height:55%;background:#3a2415;bottom:0;right:18%;border-radius:3px 3px 0 0}
-  .escena-chimenea{position:absolute;width:10%;height:22px;background:#5c3a26;top:-20px;right:14%}
-  .escena-humo{position:absolute;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.55);top:-30px}
+  .escena-casa{position:absolute;bottom:18%;left:8%;width:30%;max-width:150px;filter:drop-shadow(3px 6px 5px rgba(0,0,0,.28))}
+  .escena-casa-cuerpo{background:linear-gradient(90deg,#7a4d33,#8a5a3c 60%,#6e4529);height:60%;border-radius:2px 2px 0 0;position:relative}
+  .escena-casa-techo{width:0;height:0;border-left:calc(50% + 8px) solid transparent;border-right:calc(50% + 8px) solid transparent;border-bottom:38px solid #4a2e1c;margin:0 -8px}
+  .escena-casa-ventana{position:absolute;width:22%;height:28%;background:radial-gradient(circle at 35% 30%,#fff3b0,#ffce54 80%);top:20%;left:15%;border-radius:2px;box-shadow:0 0 10px 2px rgba(255,206,84,.65)}
+  .escena-casa-puerta{position:absolute;width:24%;height:55%;background:#2e1c10;bottom:0;right:18%;border-radius:3px 3px 0 0}
+  .escena-chimenea{position:absolute;width:10%;height:22px;background:#4a2e1c;top:-20px;right:14%}
+  .escena-humo{position:absolute;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.55);top:-30px;filter:blur(1px)}
 
-  .escena-arbol{position:absolute;bottom:16%;transform-origin:bottom center;animation:balanceo var(--dur-viento,4s) ease-in-out infinite}
-  .escena-arbol-tronco{width:8%;height:38%;background:#5c3a26;margin:0 auto;border-radius:2px}
-  .escena-arbol-copa{width:100%;aspect-ratio:1.1;border-radius:50%;background:radial-gradient(circle at 35% 30%,#4f9d5e,#2e6b3d 75%);margin-bottom:-6%}
+  .escena-arbol{position:absolute;bottom:16%;transform-origin:bottom center;animation:balanceo var(--dur-viento,4s) ease-in-out infinite;filter:drop-shadow(2px 4px 3px rgba(0,0,0,.25))}
+  .escena-arbol-tronco{width:8%;height:38%;background:linear-gradient(90deg,#4a2e1c,#5c3a26 55%,#3e2515);margin:0 auto;border-radius:2px}
+  .escena-arbol-copa{position:relative;width:100%;aspect-ratio:1.3;margin-bottom:-10%}
+  .escena-arbol-copa span{position:absolute;border-radius:50%;background:radial-gradient(circle at 32% 28%,#5cb56e,#2e6b3d 78%)}
+  .escena-arbol-copa span:nth-child(1){width:62%;height:62%;left:2%;bottom:0}
+  .escena-arbol-copa span:nth-child(2){width:62%;height:62%;right:2%;bottom:2%}
+  .escena-arbol-copa span:nth-child(3){width:70%;height:70%;left:16%;top:0}
   @keyframes balanceo{0%,100%{transform:rotate(calc(-1deg * var(--amp-viento,2)))}50%{transform:rotate(calc(1deg * var(--amp-viento,2)))}}
-
-  .escena-lluvia,.escena-nieve{position:absolute;inset:0;overflow:hidden;pointer-events:none}
-  .gota{position:absolute;width:2px;background:linear-gradient(180deg,transparent,#bcdcff);top:-5%;animation-name:caer-lluvia;animation-timing-function:linear;animation-iteration-count:infinite}
-  @keyframes caer-lluvia{from{transform:translateY(0)}to{transform:translateY(340%)}}
-  .copo{position:absolute;background:#fff;border-radius:50%;top:-5%;opacity:.9;animation-name:caer-nieve;animation-timing-function:linear;animation-iteration-count:infinite}
-  @keyframes caer-nieve{from{transform:translate(0,0)}to{transform:translate(var(--drift,15px),340%)}}
 
   .escena-niebla{position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(220,230,240,.55) 60%,rgba(220,230,240,.75));pointer-events:none}
   .escena-relampago{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
@@ -160,20 +154,14 @@
   <div class="section">
     <div class="escena-wrap" id="escena-wrap">
       <div class="escena-cielo dia" id="escena-cielo">
-        <div class="escena-sol" id="escena-sol"></div>
-        <div class="escena-luna" id="escena-luna" style="opacity:0"></div>
         <div id="escena-estrellas"></div>
-        <div id="escena-nubes"></div>
-        <div class="escena-lluvia" id="escena-lluvia"></div>
-        <div class="escena-nieve" id="escena-nieve"></div>
-        <div class="escena-niebla" id="escena-niebla" style="display:none"></div>
-        <div class="escena-relampago" id="escena-relampago"></div>
+        <canvas id="escena-canvas-fondo" class="escena-canvas"></canvas>
         <div class="escena-suelo" id="escena-suelo">
-          <div class="escena-arbol" style="left:56%;width:16%;--dur-viento:4s;--amp-viento:2">
-            <div class="escena-arbol-copa"></div><div class="escena-arbol-tronco"></div>
+          <div class="escena-arbol" style="left:52%;width:18%;--dur-viento:4s;--amp-viento:2">
+            <div class="escena-arbol-copa"><span></span><span></span><span></span></div><div class="escena-arbol-tronco"></div>
           </div>
-          <div class="escena-arbol" style="left:75%;width:12%;--dur-viento:3.6s;--amp-viento:2.4">
-            <div class="escena-arbol-copa"></div><div class="escena-arbol-tronco"></div>
+          <div class="escena-arbol" style="left:74%;width:13%;--dur-viento:3.6s;--amp-viento:2.4">
+            <div class="escena-arbol-copa"><span></span><span></span><span></span></div><div class="escena-arbol-tronco"></div>
           </div>
         </div>
         <div class="escena-casa">
@@ -181,6 +169,9 @@
           <div class="escena-casa-techo"></div>
           <div class="escena-casa-cuerpo"><div class="escena-casa-ventana"></div><div class="escena-casa-puerta"></div></div>
         </div>
+        <canvas id="escena-canvas-frente" class="escena-canvas"></canvas>
+        <div class="escena-niebla" id="escena-niebla" style="display:none"></div>
+        <div class="escena-relampago" id="escena-relampago"></div>
       </div>
       <div class="escena-overlay-info">
         <div class="escena-temp" id="escena-temp">—°</div>
@@ -396,35 +387,181 @@ function _amplitudViento(kmh){ return Math.min(12, 1+(kmh||0)/6); }
 function _intensidadLluvia(mm){ return Math.max(6, Math.min(40, Math.round((mm||1)*12))); }
 function _intensidadNieve(mm){ return Math.max(8, Math.min(30, Math.round((mm||1)*10))); }
 
-function renderNubes(cantidad){
-  const cont=document.getElementById('escena-nubes');
-  if(!cont) return;
-  let html='';
-  for(let i=0;i<cantidad;i++){
-    const top=8+Math.random()*22, w=18+Math.random()*14, dur=30+Math.random()*30, delay=-Math.random()*dur;
-    html+='<div class="escena-nube" style="top:'+top+'%;left:0;width:'+w+'%;height:'+(w*0.4)+'%;animation:derivar '+dur+'s linear infinite;animation-delay:'+delay+'s"></div>';
-  }
-  cont.innerHTML=html;
+// ── motor de particulas en canvas: sol con rayos, nubes con blur real, lluvia con angulo de viento, nieve con deriva y profundidad ──
+let _canvasFondo=null, _ctxFondo=null, _canvasFrente=null, _ctxFrente=null, _rafId=null, _tiempoEscena=0;
+let _nubesEscena=[], _particulasLluvia=[], _particulasNieve=[];
+let _condicionEscena={categoria:'despejado', esDia:true, vientoKmh:0};
+let _boltActivoHasta=0, _boltPuntos=null;
+
+function _crearNubes(cantidad, ancho, alto){
+  const arr=[];
+  for(let i=0;i<cantidad;i++) arr.push({ x:Math.random()*ancho, y:alto*(0.06+Math.random()*0.22), escala:0.6+Math.random()*0.8, velocidad:3+Math.random()*6, opacidad:0.55+Math.random()*0.35 });
+  return arr;
 }
-function renderLluvia(cantidad){
-  const cont=document.getElementById('escena-lluvia');
-  if(!cont) return;
-  if(!cantidad){ cont.innerHTML=''; return; }
-  let html='';
-  for(let i=0;i<cantidad;i++){
-    const left=Math.random()*100, dur=0.5+Math.random()*0.5, delay=-Math.random()*dur, h=10+Math.random()*10;
-    html+='<div class="gota" style="left:'+left+'%;height:'+h+'px;animation-duration:'+dur+'s;animation-delay:'+delay+'s"></div>';
-  }
-  cont.innerHTML=html;
+function _crearParticulasLluvia(cantidad, ancho, alto){
+  const arr=[];
+  for(let i=0;i<cantidad;i++) arr.push({ x:Math.random()*ancho, y:Math.random()*alto, largo:14+Math.random()*16, vel:9+Math.random()*7, opacidad:0.35+Math.random()*0.4 });
+  return arr;
 }
-function renderNieve(cantidad){
-  const cont=document.getElementById('escena-nieve');
+function _crearParticulasNieve(cantidad, ancho, alto){
+  const arr=[];
+  for(let i=0;i<cantidad;i++) arr.push({ x:Math.random()*ancho, y:Math.random()*alto, radio:1.5+Math.random()*2.8, vel:0.6+Math.random()*1.1, fase:Math.random()*Math.PI*2, ampDrift:8+Math.random()*14, opacidad:0.55+Math.random()*0.4 });
+  return arr;
+}
+function _generarBoltPuntos(ancho,alto){
+  const puntos=[]; let x=ancho*(0.3+Math.random()*0.4), y=0;
+  puntos.push([x,y]);
+  while(y<alto*0.7){ x+=(Math.random()-0.5)*ancho*0.08; y+=alto*0.09+Math.random()*alto*0.05; puntos.push([x,y]); }
+  return puntos;
+}
+
+function _dibujarNubes(ctx, ancho, alto, factorViento){
+  ctx.save();
+  _nubesEscena.forEach(n=>{
+    n.x += n.velocidad*factorViento*0.4;
+    if(n.x-90*n.escala>ancho) n.x=-90*n.escala;
+    ctx.filter='blur(6px)';
+    ctx.globalAlpha=n.opacidad;
+    ctx.fillStyle='#ffffff';
+    const w=70*n.escala, h=26*n.escala;
+    ctx.beginPath();
+    ctx.ellipse(n.x, n.y, w*0.55, h, 0, 0, Math.PI*2);
+    ctx.ellipse(n.x-w*0.35, n.y+h*0.15, w*0.4, h*0.8, 0, 0, Math.PI*2);
+    ctx.ellipse(n.x+w*0.4, n.y+h*0.1, w*0.42, h*0.75, 0, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+function _dibujarSol(ctx, ancho, alto, t){
+  const cx=ancho*0.78, cy=alto*0.20, r=Math.min(ancho,alto)*0.11;
+  ctx.save();
+  const glow=ctx.createRadialGradient(cx,cy,0,cx,cy,r*3.2);
+  glow.addColorStop(0,'rgba(255,224,140,.55)'); glow.addColorStop(1,'rgba(255,224,140,0)');
+  ctx.fillStyle=glow;
+  ctx.beginPath(); ctx.arc(cx,cy,r*3.2,0,Math.PI*2); ctx.fill();
+  ctx.translate(cx,cy); ctx.rotate(t*0.05);
+  ctx.strokeStyle='rgba(255,206,84,.55)'; ctx.lineWidth=Math.max(2,r*0.06);
+  for(let i=0;i<12;i++){
+    const ang=(i/12)*Math.PI*2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ang)*r*1.15, Math.sin(ang)*r*1.15);
+    ctx.lineTo(Math.cos(ang)*r*1.55, Math.sin(ang)*r*1.55);
+    ctx.stroke();
+  }
+  ctx.rotate(-t*0.05); ctx.translate(-cx,-cy);
+  const nucleo=ctx.createRadialGradient(cx-r*0.25,cy-r*0.25,0,cx,cy,r);
+  nucleo.addColorStop(0,'#fff6d6'); nucleo.addColorStop(0.55,'#ffce54'); nucleo.addColorStop(1,'#ffb020');
+  ctx.fillStyle=nucleo;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function _dibujarLuna(ctx, ancho, alto){
+  const cx=ancho*0.78, cy=alto*0.20, r=Math.min(ancho,alto)*0.085;
+  ctx.save();
+  const glow=ctx.createRadialGradient(cx,cy,0,cx,cy,r*2.2);
+  glow.addColorStop(0,'rgba(255,255,255,.35)'); glow.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=glow;
+  ctx.beginPath(); ctx.arc(cx,cy,r*2.2,0,Math.PI*2); ctx.fill();
+  const nucleo=ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,0,cx,cy,r);
+  nucleo.addColorStop(0,'#ffffff'); nucleo.addColorStop(0.7,'#c9d3e0'); nucleo.addColorStop(1,'#aab6c9');
+  ctx.fillStyle=nucleo;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(160,170,190,.35)';
+  ctx.beginPath(); ctx.arc(cx-r*0.3,cy+r*0.2,r*0.18,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.25,cy-r*0.15,r*0.12,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function _dibujarLluvia(ctx, ancho, alto, vientoDir){
+  ctx.save();
+  ctx.strokeStyle='rgba(190,220,255,.75)'; ctx.lineCap='round';
+  _particulasLluvia.forEach(p=>{
+    p.y+=p.vel; p.x+=vientoDir*p.vel*0.35;
+    if(p.y>alto){ p.y=-10; p.x=Math.random()*ancho; }
+    ctx.globalAlpha=p.opacidad; ctx.lineWidth=1.4;
+    ctx.beginPath();
+    ctx.moveTo(p.x,p.y);
+    ctx.lineTo(p.x-vientoDir*p.largo*0.35, p.y+p.largo);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+function _dibujarNieve(ctx, ancho, alto){
+  ctx.save();
+  ctx.fillStyle='#ffffff';
+  _particulasNieve.forEach(p=>{
+    p.y+=p.vel; p.fase+=0.02;
+    if(p.y>alto){ p.y=-6; p.x=Math.random()*ancho; }
+    const x=p.x+Math.sin(p.fase)*p.ampDrift*0.3;
+    ctx.globalAlpha=p.opacidad;
+    ctx.beginPath(); ctx.arc(x,p.y,p.radio,0,Math.PI*2); ctx.fill();
+  });
+  ctx.restore();
+}
+function _dibujarRayoBolt(ctx, puntos){
+  ctx.save();
+  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2.5;
+  ctx.shadowColor='#dbe9ff'; ctx.shadowBlur=8;
+  ctx.beginPath();
+  puntos.forEach(([x,y],i)=>{ if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.stroke();
+  ctx.restore();
+}
+
+function _ajustarTamanoCanvas(){
+  const wrap=document.getElementById('escena-wrap');
+  if(!wrap||!_canvasFondo||!_canvasFrente) return;
+  const rect=wrap.getBoundingClientRect();
+  const dpr=(typeof window!=='undefined'&&window.devicePixelRatio)||1;
+  const w=Math.round((rect.width||600)*dpr), h=Math.round((rect.height||412)*dpr);
+  [_canvasFondo,_canvasFrente].forEach(cv=>{ cv.width=w; cv.height=h; });
+  if(_ctxFondo.setTransform) _ctxFondo.setTransform(dpr,0,0,dpr,0,0);
+  if(_ctxFrente.setTransform) _ctxFrente.setTransform(dpr,0,0,dpr,0,0);
+}
+function _inicializarCanvasEscena(){
+  if(_canvasFondo) return;
+  _canvasFondo=document.getElementById('escena-canvas-fondo');
+  _canvasFrente=document.getElementById('escena-canvas-frente');
+  if(!_canvasFondo||!_canvasFrente) return;
+  _ctxFondo=_canvasFondo.getContext('2d');
+  _ctxFrente=_canvasFrente.getContext('2d');
+  _ajustarTamanoCanvas();
+  if(!_rafId && typeof requestAnimationFrame!=='undefined') _rafId=requestAnimationFrame(_tickEscena);
+}
+function _tickEscena(){
+  if(typeof requestAnimationFrame!=='undefined') _rafId=requestAnimationFrame(_tickEscena);
+  if(!_ctxFondo||!_ctxFrente||!_canvasFondo) return;
+  const dpr=(typeof window!=='undefined'&&window.devicePixelRatio)||1;
+  const ancho=_canvasFondo.width/dpr, alto=_canvasFondo.height/dpr;
+  _tiempoEscena+=0.016;
+  _ctxFondo.clearRect(0,0,ancho,alto);
+  _ctxFrente.clearRect(0,0,ancho,alto);
+
+  const {categoria,esDia,vientoKmh}=_condicionEscena;
+  if(esDia && (categoria==='despejado'||categoria==='parcial')) _dibujarSol(_ctxFondo,ancho,alto,_tiempoEscena);
+  if(!esDia && (categoria==='despejado'||categoria==='parcial')) _dibujarLuna(_ctxFondo,ancho,alto);
+  if(['nublado','lluvia','niebla','nieve','parcial','tormenta'].includes(categoria)){
+    _dibujarNubes(_ctxFondo, ancho, alto, Math.min(3, 1+vientoKmh/25));
+  }
+  if(categoria==='lluvia'||categoria==='tormenta'){
+    const dir = vientoKmh>5 ? Math.min(1, vientoKmh/60) : 0;
+    _dibujarLluvia(_ctxFrente, ancho, alto, dir);
+  }
+  if(categoria==='nieve') _dibujarNieve(_ctxFrente, ancho, alto);
+
+  const ahoraMs=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+  if(ahoraMs<_boltActivoHasta){
+    if(!_boltPuntos) _boltPuntos=_generarBoltPuntos(ancho,alto);
+    _dibujarRayoBolt(_ctxFrente, _boltPuntos);
+  } else { _boltPuntos=null; }
+}
+function _renderEstrellas(mostrar){
+  const cont=document.getElementById('escena-estrellas');
   if(!cont) return;
-  if(!cantidad){ cont.innerHTML=''; return; }
+  if(!mostrar){ cont.innerHTML=''; return; }
   let html='';
-  for(let i=0;i<cantidad;i++){
-    const left=Math.random()*100, dur=4+Math.random()*4, delay=-Math.random()*dur, size=2+Math.random()*3, drift=(Math.random()*30-15)+'px';
-    html+='<div class="copo" style="left:'+left+'%;width:'+size+'px;height:'+size+'px;--drift:'+drift+';animation-duration:'+dur+'s;animation-delay:'+delay+'s"></div>';
+  for(let i=0;i<40;i++){
+    const top=Math.random()*55, left=Math.random()*100, delay=Math.random()*3;
+    html+='<div class="escena-estrella" style="top:'+top+'%;left:'+left+'%;animation-delay:'+delay+'s"></div>';
   }
   cont.innerHTML=html;
 }
@@ -433,8 +570,9 @@ function iniciarRelampagos(){
   if(_relampagoInterval) return;
   _relampagoInterval=setInterval(()=>{
     const el=document.getElementById('escena-relampago');
-    if(!el) return;
-    el.classList.remove('flash'); void 0; el.classList.add('flash');
+    if(el){ el.classList.remove('flash'); void 0; el.classList.add('flash'); }
+    _boltPuntos=null;
+    _boltActivoHasta=((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now())+220;
   }, 4000+Math.random()*4000);
 }
 function detenerRelampagos(){ if(_relampagoInterval){ clearInterval(_relampagoInterval); _relampagoInterval=null; } }
@@ -451,14 +589,17 @@ function aplicarEscena(){
     else if(['nublado','lluvia','niebla','nieve'].includes(categoria)){ cieloEl.classList.add('nublado'); if(!esDia) cieloEl.classList.add('noche'); }
     else cieloEl.classList.add(esDia?'dia':'noche');
   }
-  const solEl=document.getElementById('escena-sol');
-  if(solEl) solEl.style.opacity = (esDia && (categoria==='despejado'||categoria==='parcial')) ? '1':'0';
-  const lunaEl=document.getElementById('escena-luna');
-  if(lunaEl) lunaEl.style.opacity = (!esDia && (categoria==='despejado'||categoria==='parcial')) ? '1':'0';
 
-  renderNubes(categoria==='despejado'?0:categoria==='parcial'?2:5);
-  renderLluvia(['lluvia','tormenta'].includes(categoria) ? _intensidadLluvia(c.precipitation) : 0);
-  renderNieve(categoria==='nieve' ? _intensidadNieve(c.precipitation) : 0);
+  _inicializarCanvasEscena();
+  _ajustarTamanoCanvas();
+  const dpr=(typeof window!=='undefined'&&window.devicePixelRatio)||1;
+  const ancho=(_canvasFondo?_canvasFondo.width:600)/dpr, alto=(_canvasFondo?_canvasFondo.height:412)/dpr;
+
+  _condicionEscena={categoria, esDia, vientoKmh:c.wind_speed_10m||0};
+  _nubesEscena = categoria==='despejado' ? [] : _crearNubes(categoria==='parcial'?3:6, ancho, alto);
+  _particulasLluvia = ['lluvia','tormenta'].includes(categoria) ? _crearParticulasLluvia(_intensidadLluvia(c.precipitation)*3, ancho, alto) : [];
+  _particulasNieve = categoria==='nieve' ? _crearParticulasNieve(_intensidadNieve(c.precipitation)*3, ancho, alto) : [];
+  _renderEstrellas(!esDia && (categoria==='despejado'||categoria==='parcial'));
 
   const nieblaEl=document.getElementById('escena-niebla');
   if(nieblaEl) nieblaEl.style.display = categoria==='niebla' ? 'block':'none';
