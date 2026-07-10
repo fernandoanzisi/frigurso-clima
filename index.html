@@ -156,6 +156,19 @@
   .safety-badge.warn{background:rgba(245,184,61,.15);color:var(--gold)}
   .safety-badge.bad{background:rgba(248,113,113,.15);color:var(--red)}
 
+  .nowcast-banner{display:flex;align-items:center;gap:12px;background:rgba(59,158,255,.12);border:1px solid rgba(59,158,255,.35);border-radius:14px;padding:13px 15px}
+  .nowcast-banner.urgente{background:rgba(248,113,113,.14);border-color:rgba(248,113,113,.4);animation:nowcast-pulso 1.7s ease-in-out infinite}
+  @keyframes nowcast-pulso{0%,100%{opacity:1}50%{opacity:.72}}
+  .nowcast-icon{font-size:24px;flex-shrink:0}
+  .nowcast-title{font-size:13.5px;font-weight:800;line-height:1.3}
+  .nowcast-sub{font-size:10.5px;color:var(--text3);margin-top:3px}
+
+  body.a11y-grande{zoom:1.16}
+  body.a11y-contraste{zoom:1.3}
+  :root[data-contraste="alto"]{--text2:var(--text);--text3:var(--text2)}
+  :root[data-contraste="alto"][data-theme="dark"]{--border:#4a6690}
+  :root[data-contraste="alto"][data-theme="light"]{--border:#8fa3c4}
+
   .row-fav{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text3);transition:background .15s}
   .row-fav:active{background:var(--bg3)}
 
@@ -190,6 +203,7 @@
 <div class="page active" id="page-home">
   <div class="header">
     <div style="flex:1"><div class="header-title">🌤️ Clima</div><div class="header-sub" id="home-lugar">Obteniendo tu ubicación...</div></div>
+    <button class="btn-icon" id="btn-a11y" style="font-size:13px;font-weight:800" onclick="toggleAccesibilidad()">Aa</button>
     <button class="btn-icon" id="btn-tema" onclick="toggleTema()">🌙</button>
     <button class="btn-icon" onclick="abrirModalDespertador()">⏰</button>
     <button class="btn-icon" onclick="abrirModalLugar()">📍</button>
@@ -224,6 +238,7 @@
       <button class="escena-btn-compartir" onclick="compartirClima()">📤</button>
     </div>
   </div>
+  <div class="section" id="home-nowcast" style="display:none"></div>
   <div class="section" style="text-align:center">
     <span class="safety-badge ok" id="home-safety-badge">Cargando...</span>
   </div>
@@ -236,6 +251,7 @@
 <!-- PRONOSTICO -->
 <div class="page" id="page-pronostico">
   <div class="header"><div style="flex:1"><div class="header-title">📊 Pronóstico</div><div class="header-sub" id="pron-lugar">—</div></div></div>
+  <div class="section" id="pron-historico" style="display:none"></div>
   <div class="section pill-row">
     <button class="pill sel" id="pron-tab-temp" onclick="cambiarTabPronostico('temp')">🌡️ Temperatura</button>
     <button class="pill" id="pron-tab-precip" onclick="cambiarTabPronostico('precip')">🌧️ Precipitación</button>
@@ -346,6 +362,24 @@ function aplicarTema(){
   const meta=document.querySelector('meta[name="theme-color"]');
   if(meta) meta.setAttribute('content', esClaro?'#f2f6fb':'#0a1930');
 }
+// ── accesibilidad: letra grande y alto contraste, para leer bien con sol en la pantalla ──
+const A11Y_NIVELES=['normal','grande','contraste'];
+function _a11yGuardado(){ return localStorage.getItem('clima_a11y')||'normal'; }
+function aplicarAccesibilidad(){
+  const nivel=_a11yGuardado();
+  document.body.classList.remove('a11y-grande','a11y-contraste');
+  document.documentElement.removeAttribute('data-contraste');
+  if(nivel==='grande') document.body.classList.add('a11y-grande');
+  else if(nivel==='contraste'){ document.body.classList.add('a11y-contraste'); document.documentElement.setAttribute('data-contraste','alto'); }
+}
+function toggleAccesibilidad(){
+  const idx=A11Y_NIVELES.indexOf(_a11yGuardado());
+  const siguiente=A11Y_NIVELES[(idx+1)%A11Y_NIVELES.length];
+  localStorage.setItem('clima_a11y', siguiente);
+  aplicarAccesibilidad();
+  const etiquetas={normal:'Tamaño normal', grande:'🔍 Letra grande', contraste:'🔍 Letra grande + alto contraste'};
+  toast(etiquetas[siguiente]);
+}
 function toggleTema(){
   const t=localStorage.getItem('clima_tema')||'auto';
   const esClaroActual = t==='light' || (t==='auto' && _sistemaPrefiereClaro());
@@ -380,6 +414,8 @@ function _iconoClima(code){
 // ═══════════════════════════════════════════════════════════════
 let CLIMA_ACTUAL=null;
 let CALIDAD_AIRE_ACTUAL=null;
+let NOWCAST_ACTUAL=null;
+let HISTORICO_ACTUAL=null;
 let UBICACION_ACTIVA=null; // {nombre, lat, lon}
 let LUGARES=[];
 
@@ -401,6 +437,59 @@ async function _obtenerCalidadAire(lat, lon){
   const data=await res.json();
   return data.current||null;
 }
+// nowcast hiperlocal: pronostico real de 15 en 15 minutos para TU ubicacion exacta (no el
+// promedio del dia) — con esto detectamos "va a empezar/parar de llover en los proximos X min",
+// el tipo de aviso que hacia famosa a Dark Sky y que casi ninguna app de clima da hoy.
+async function _obtenerNowcast15(lat, lon){
+  const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+
+    '&minutely_15=precipitation,weather_code&forecast_minutely_15=24&timezone=auto';
+  const res=await fetch(url);
+  const data=await res.json();
+  return data.minutely_15||null;
+}
+function _analizarNowcast(m15){
+  if(!m15 || !m15.time || !m15.precipitation || !m15.precipitation.length) return null;
+  const UMBRAL=0.1;
+  const ahoraLlueve=m15.precipitation[0]>=UMBRAL;
+  for(let i=1;i<m15.precipitation.length;i++){
+    if(!ahoraLlueve && m15.precipitation[i]>=UMBRAL) return {tipo:'empieza', minutos:i*15};
+    if(ahoraLlueve && m15.precipitation[i]<UMBRAL) return {tipo:'para', minutos:i*15};
+  }
+  return null;
+}
+let _ultimaNotifLluvia=0;
+function _chequearNotificacionLluvia(){
+  if(!NOWCAST_ACTUAL || NOWCAST_ACTUAL.tipo!=='empieza' || NOWCAST_ACTUAL.minutos>20) return;
+  if(typeof Notification==='undefined') return;
+  if(Date.now()-_ultimaNotifLluvia<30*60000) return;
+  if(Notification.permission==='granted'){
+    new Notification('🌧️ Frigurso Clima', {body:'Va a empezar a llover en los próximos minutos en '+(UBICACION_ACTIVA?UBICACION_ACTIVA.nombre:'tu zona')+'.'});
+    _ultimaNotifLluvia=Date.now();
+  } else if(Notification.permission!=='denied'){
+    Notification.requestPermission();
+  }
+}
+// comparacion con el mismo dia del año pasado (Open-Meteo Historical, gratis). Se cachea por
+// dia+ubicacion en localStorage porque el dato de hace un año nunca cambia dentro del mismo dia.
+function _fechaHace1Anio(){
+  const d=new Date(); d.setFullYear(d.getFullYear()-1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+async function _obtenerHistoricoMismaFecha(lat, lon){
+  const cacheKey='clima_historico_'+fechaHoy()+'_'+lat.toFixed(2)+'_'+lon.toFixed(2);
+  const cache=localStorage.getItem(cacheKey);
+  if(cache){ try{ return JSON.parse(cache); }catch(e){} }
+  const fecha=_fechaHace1Anio();
+  const url='https://archive-api.open-meteo.com/v1/archive?latitude='+lat+'&longitude='+lon+
+    '&start_date='+fecha+'&end_date='+fecha+'&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto';
+  const res=await fetch(url);
+  const data=await res.json();
+  const d=data.daily;
+  if(!d || !d.time || !d.time.length) return null;
+  const resultado={max:d.temperature_2m_max[0], min:d.temperature_2m_min[0], code:d.weather_code[0]};
+  localStorage.setItem(cacheKey, JSON.stringify(resultado));
+  return resultado;
+}
 async function _reverseGeocode(lat, lon){
   try{
     const res=await fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lon+'&format=json&accept-language=es');
@@ -421,6 +510,8 @@ async function cargarClimaParaUbicacion(ubicacion){
     localStorage.setItem('clima_ultima_ubicacion', JSON.stringify(ubicacion));
     localStorage.setItem('clima_cache', JSON.stringify({clima:CLIMA_ACTUAL, ts:Date.now()}));
     _obtenerCalidadAire(ubicacion.lat, ubicacion.lon).then(a=>{ CALIDAD_AIRE_ACTUAL=a; renderTodo(); }).catch(()=>{ CALIDAD_AIRE_ACTUAL=null; });
+    _obtenerNowcast15(ubicacion.lat, ubicacion.lon).then(m15=>{ NOWCAST_ACTUAL=_analizarNowcast(m15); renderTodo(); _chequearNotificacionLluvia(); }).catch(()=>{ NOWCAST_ACTUAL=null; });
+    _obtenerHistoricoMismaFecha(ubicacion.lat, ubicacion.lon).then(h=>{ HISTORICO_ACTUAL=h; renderTodo(); }).catch(()=>{ HISTORICO_ACTUAL=null; });
     renderTodo();
     verificarSaludoDespertador();
   }catch(e){
@@ -1144,10 +1235,23 @@ async function compartirClima(){
     toast('No se pudo compartir');
   }
 }
+function renderNowcastBanner(){
+  const el=document.getElementById('home-nowcast');
+  if(!el) return;
+  if(!NOWCAST_ACTUAL){ el.style.display='none'; el.innerHTML=''; return; }
+  const {tipo,minutos}=NOWCAST_ACTUAL;
+  const urgente=minutos<=20;
+  const cuando = minutos<=15 ? 'en los próximos minutos' : 'en aproximadamente '+minutos+' minutos';
+  const titulo = tipo==='empieza' ? 'Va a empezar a llover '+cuando : 'La lluvia va a parar '+cuando;
+  el.style.display='block';
+  el.innerHTML='<div class="nowcast-banner'+(urgente?' urgente':'')+'"><div class="nowcast-icon">'+(tipo==='empieza'?'🌧️':'🌤️')+'</div>'+
+    '<div><div class="nowcast-title">'+titulo+'</div><div class="nowcast-sub">Pronóstico de alta resolución para tu ubicación exacta</div></div></div>';
+}
 function renderHome(){
   if(!CLIMA_ACTUAL){ return; }
   document.getElementById('home-lugar').textContent=UBICACION_ACTIVA?UBICACION_ACTIVA.nombre:'—';
   aplicarEscena();
+  renderNowcastBanner();
   const seg=calcularIndiceSeguridad(CLIMA_ACTUAL, CALIDAD_AIRE_ACTUAL);
   const badge=document.getElementById('home-safety-badge');
   badge.className='safety-badge '+seg.nivel;
@@ -1224,9 +1328,24 @@ function dibujarChartPronostico(){
   });
   ctx.stroke();
 }
+function renderHistoricoComparacion(){
+  const el=document.getElementById('pron-historico');
+  if(!el) return;
+  if(!HISTORICO_ACTUAL || !CLIMA_ACTUAL || !CLIMA_ACTUAL.daily || !CLIMA_ACTUAL.daily.temperature_2m_max){ el.style.display='none'; el.innerHTML=''; return; }
+  const hoyMax=CLIMA_ACTUAL.daily.temperature_2m_max[0];
+  const diff=Math.round(hoyMax-HISTORICO_ACTUAL.max);
+  let texto;
+  if(diff>0) texto='Hoy va a estar <strong>'+diff+'° más cálido</strong> que este mismo día el año pasado ('+Math.round(HISTORICO_ACTUAL.max)+'°).';
+  else if(diff<0) texto='Hoy va a estar <strong>'+Math.abs(diff)+'° más frío</strong> que este mismo día el año pasado ('+Math.round(HISTORICO_ACTUAL.max)+'°).';
+  else texto='Hoy está <strong>igual</strong> que este mismo día el año pasado ('+Math.round(HISTORICO_ACTUAL.max)+'°).';
+  el.style.display='block';
+  el.innerHTML='<div class="card" style="display:flex;align-items:center;gap:12px"><div class="row-icon" style="background:rgba(232,163,61,.15)">📅</div>'+
+    '<div class="row-main"><div class="row-title" style="font-weight:600;font-size:13px;white-space:normal">'+texto+'</div></div></div>';
+}
 function renderPronostico(){
   if(!CLIMA_ACTUAL) return;
   document.getElementById('pron-lugar').textContent=UBICACION_ACTIVA?UBICACION_ACTIVA.nombre:'—';
+  renderHistoricoComparacion();
   dibujarChartPronostico();
   const horas=(CLIMA_ACTUAL.hourly.time||[]).map((t,i)=>({t, temp:CLIMA_ACTUAL.hourly.temperature_2m[i], code:CLIMA_ACTUAL.hourly.weather_code[i], precipProb:CLIMA_ACTUAL.hourly.precipitation_probability[i], viento:CLIMA_ACTUAL.hourly.wind_speed_10m[i]}))
     .filter(h=>new Date(h.t).getTime()>=Date.now()-3600000).slice(0,24);
@@ -1763,6 +1882,7 @@ function guardarDespertador(){
 // ═══════════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', ()=>{
   aplicarTema();
+  aplicarAccesibilidad();
   _cargarLugares();
   iniciarConGeolocalizacion();
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
