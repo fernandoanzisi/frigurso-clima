@@ -1231,6 +1231,8 @@ async function compartirClima(){
   const alertas=calcularAlertas(CLIMA_ACTUAL, CALIDAD_AIRE_ACTUAL);
   let texto='🌤️ En '+UBICACION_ACTIVA.nombre+' hay '+Math.round(c.temperature_2m)+'° y '+_descripcionClima(c.weather_code).toLowerCase()+
     '. Sensación térmica '+Math.round(c.apparent_temperature)+'°, humedad '+c.relative_humidity_2m+'%, viento '+Math.round(c.wind_speed_10m)+' km/h.';
+  const fraseNowcast=_fraseNowcast(NOWCAST_ACTUAL);
+  if(fraseNowcast) texto+='\n'+(NOWCAST_ACTUAL.tipo==='empieza'?'🌧️ ':'🌤️ ')+fraseNowcast;
   if(alertas.length) texto+='\n⚠️ '+alertas[0].texto;
   texto+='\n\nVisto en Frigurso Clima';
 
@@ -1253,17 +1255,21 @@ async function compartirClima(){
     toast('No se pudo compartir');
   }
 }
+// frase compartida del aviso de lluvia inminente — la usan tanto el banner de Inicio como el mensaje de compartir
+function _fraseNowcast(nowcast){
+  if(!nowcast) return null;
+  const {tipo,minutos}=nowcast;
+  const cuando = minutos<=15 ? 'en los próximos minutos' : 'en aproximadamente '+minutos+' minutos';
+  return tipo==='empieza' ? 'Va a empezar a llover '+cuando+'.' : 'La lluvia va a parar '+cuando+'.';
+}
 function renderNowcastBanner(){
   const el=document.getElementById('home-nowcast');
   if(!el) return;
   if(!NOWCAST_ACTUAL){ el.style.display='none'; el.innerHTML=''; return; }
-  const {tipo,minutos}=NOWCAST_ACTUAL;
-  const urgente=minutos<=20;
-  const cuando = minutos<=15 ? 'en los próximos minutos' : 'en aproximadamente '+minutos+' minutos';
-  const titulo = tipo==='empieza' ? 'Va a empezar a llover '+cuando : 'La lluvia va a parar '+cuando;
+  const urgente=NOWCAST_ACTUAL.minutos<=20;
   el.style.display='block';
-  el.innerHTML='<div class="nowcast-banner'+(urgente?' urgente':'')+'"><div class="nowcast-icon">'+(tipo==='empieza'?'🌧️':'🌤️')+'</div>'+
-    '<div><div class="nowcast-title">'+titulo+'</div><div class="nowcast-sub">Pronóstico de alta resolución para tu ubicación exacta</div></div></div>';
+  el.innerHTML='<div class="nowcast-banner'+(urgente?' urgente':'')+'"><div class="nowcast-icon">'+(NOWCAST_ACTUAL.tipo==='empieza'?'🌧️':'🌤️')+'</div>'+
+    '<div><div class="nowcast-title">'+_fraseNowcast(NOWCAST_ACTUAL).replace(/\.$/,'')+'</div><div class="nowcast-sub">Pronóstico de alta resolución para tu ubicación exacta</div></div></div>';
 }
 function renderHome(){
   if(!CLIMA_ACTUAL){ return; }
