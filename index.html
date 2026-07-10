@@ -1457,7 +1457,14 @@ function renderGeneroVozPills(){
   const opciones=[{id:'todas',nombre:'🔊 Todas'},{id:'f',nombre:'🚺 Femeninas'},{id:'m',nombre:'🚹 Masculinas'}];
   el.innerHTML=opciones.map(o=>'<button class="pill '+(o.id===_generoVozSel?'sel':'')+'" onclick="elegirGeneroVoz(\''+o.id+'\')">'+o.nombre+'</button>').join('');
 }
-function elegirGeneroVoz(id){ _generoVozSel=id; renderGeneroVozPills(); renderVocesSelect(); }
+function elegirGeneroVoz(id){
+  _generoVozSel=id;
+  renderGeneroVozPills();
+  if(id!=='todas' && !VOCES_DISPONIBLES.some(v=>_generoVoz(v.name)===id)){
+    toast('⚠️ Tu teléfono no tiene ninguna voz '+(id==='f'?'femenina':'masculina')+' distinta instalada — mostrando todas');
+  }
+  renderVocesSelect();
+}
 function renderVocesSelect(){
   const sel=document.getElementById('desp-voz');
   if(!sel) return;
@@ -1466,6 +1473,23 @@ function renderVocesSelect(){
   const lista = filtradas.length ? filtradas : VOCES_DISPONIBLES;
   sel.innerHTML = lista.map(v=>'<option value="'+esc(v.name)+'">'+_iconoGenero(_generoVoz(v.name))+' '+esc(v.name)+' ('+v.lang+')</option>').join('');
   if(lista.some(v=>v.name===valorPrevio)) sel.value=valorPrevio;
+}
+// resuelve que voz usar de verdad al hablar: nombre exacto guardado -> si ese nombre ya no existe
+// (en Android el identificador de la voz puede variar entre sesiones/reinicios), cae a una voz
+// del MISMO GENERO elegido -> recien si no hay ninguna, a la primera disponible. Nunca se debe
+// quedar sin asignar utter.voice en silencio, porque ahi el sistema usa su default (casi siempre
+// una voz femenina en Android), que es el bug que reporto Fernando: "siempre sale femenino".
+function _resolverVoz(config){
+  if(!VOCES_DISPONIBLES.length) return null;
+  if(config && config.voz){
+    const exacta=VOCES_DISPONIBLES.find(v=>v.name===config.voz);
+    if(exacta) return exacta;
+  }
+  if(config && config.vozGenero && config.vozGenero!=='?'){
+    const porGenero=VOCES_DISPONIBLES.find(v=>_generoVoz(v.name)===config.vozGenero);
+    if(porGenero) return porGenero;
+  }
+  return VOCES_DISPONIBLES[0];
 }
 function cargarVoces(){
   if(!('speechSynthesis' in window)) return;
@@ -1485,6 +1509,10 @@ function probarVozSeleccionada(){
 if(typeof window!=='undefined' && 'speechSynthesis' in window){
   window.speechSynthesis.onvoiceschanged=cargarVoces;
   cargarVoces();
+  // algunos Android/WebView tardan en poblar getVoices() y nunca disparan onvoiceschanged —
+  // reintentamos un par de veces para no quedarnos con la lista vacia (y de rebote, con la voz default)
+  setTimeout(cargarVoces, 1000);
+  setTimeout(cargarVoces, 3000);
 }
 function generarMensajeDespertador(nombre, clima, fraseSaludo){
   const c=clima.current;
@@ -1510,7 +1538,7 @@ function hablarSaludo(texto){
   if(!('speechSynthesis' in window)){ toast('Este dispositivo no soporta voz'); return; }
   const utter=new SpeechSynthesisUtterance(texto);
   const config=JSON.parse(localStorage.getItem('clima_despertador')||'null');
-  const voz = config && config.voz ? VOCES_DISPONIBLES.find(v=>v.name===config.voz) : VOCES_DISPONIBLES[0];
+  const voz=_resolverVoz(config);
   if(voz) utter.voice=voz;
   utter.lang='es-ES'; utter.rate=0.95; utter.pitch=1.05;
   window.speechSynthesis.speak(utter);
@@ -1722,9 +1750,10 @@ function guardarDespertador(){
   const frase=(document.getElementById('desp-frase').value||'').trim();
   const hora=document.getElementById('desp-hora').value||'07:00';
   const voz=document.getElementById('desp-voz').value||'';
+  const vozGenero=voz ? _generoVoz(voz) : '';
   const sonido=_sonidoSel;
   const repetir=_repetirSel;
-  localStorage.setItem('clima_despertador', JSON.stringify({activo,nombre,frase,hora,voz,sonido,repetir}));
+  localStorage.setItem('clima_despertador', JSON.stringify({activo,nombre,frase,hora,voz,vozGenero,sonido,repetir}));
   cerrarModal('despertador');
   toast('✅ Guardado');
 }
