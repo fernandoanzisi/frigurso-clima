@@ -150,6 +150,9 @@
   .escena-overlay-info{position:absolute;left:10px;bottom:10px;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);border-radius:12px;padding:8px 12px;color:#fff}
   .escena-btn-compartir{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center}
   .escena-btn-compartir:active{background:rgba(6,16,32,.8)}
+  .escena-btn-sonido{position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;opacity:.65}
+  .escena-btn-sonido.activo{opacity:1;background:rgba(59,158,255,.75)}
+  .escena-btn-sonido:active{background:rgba(6,16,32,.8)}
   .escena-temp{font-size:26px;font-weight:900;font-family:var(--mono);line-height:1}
   .escena-desc{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;opacity:.9}
 
@@ -238,13 +241,16 @@
         <div class="escena-desc" id="escena-desc">Cargando</div>
       </div>
       <button class="escena-btn-compartir" onclick="compartirClima()">📤</button>
+      <button class="escena-btn-sonido" id="btn-sonido-ambiente" onclick="toggleSonidoAmbiente()">🔊</button>
     </div>
   </div>
+  <div class="section" style="text-align:center;margin-top:-6px" id="home-actualizado"></div>
   <div class="section" id="home-nowcast" style="display:none"></div>
   <div class="section" style="text-align:center">
     <span class="safety-badge ok" id="home-safety-badge">Cargando...</span>
   </div>
   <div class="kpi-grid" id="home-kpis"></div>
+  <div class="section" id="home-ropa" style="display:none"></div>
   <div class="section" id="home-aire" style="display:none"></div>
   <div class="section"><div class="section-title">Próximas horas</div><div class="pill-row" id="home-horas"></div></div>
   <div class="section" style="margin-top:14px"><div class="section-title">Alertas activas</div><div id="home-alertas"></div></div>
@@ -434,6 +440,16 @@ let CLIMA_ACTUAL=null;
 let CALIDAD_AIRE_ACTUAL=null;
 let NOWCAST_ACTUAL=null;
 let HISTORICO_ACTUAL=null;
+let ULTIMA_ACTUALIZACION_MS=null;
+function _tiempoRelativo(ms){
+  if(!ms) return null;
+  const diffMin=Math.round((Date.now()-ms)/60000);
+  if(diffMin<1) return 'justo ahora';
+  if(diffMin===1) return 'hace 1 minuto';
+  if(diffMin<60) return 'hace '+diffMin+' minutos';
+  const horas=Math.round(diffMin/60);
+  return horas===1 ? 'hace 1 hora' : 'hace '+horas+' horas';
+}
 let UBICACION_ACTIVA=null; // {nombre, lat, lon}
 let LUGARES=[];
 
@@ -447,6 +463,29 @@ async function _obtenerClima(lat, lon){
   return res.json();
 }
 // UV: categorias oficiales de la OMS
+function _direccionCardinal(deg){
+  if(deg==null) return '';
+  const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
+  return dirs[Math.round(deg/22.5)%16];
+}
+// sugerencia de ropa combinando temperatura, viento y probabilidad de lluvia real de las proximas horas
+function _sugerenciaRopa(clima){
+  if(!clima || !clima.current) return null;
+  const c=clima.current;
+  const categoria=_categoriaClima(c.weather_code);
+  const probLluviaProx = clima.hourly && clima.hourly.precipitation_probability ? Math.max(...clima.hourly.precipitation_probability.slice(0,6)) : 0;
+  const vaLlover = ['lluvia','tormenta'].includes(categoria) || probLluviaProx>=50;
+  let prenda;
+  if(c.temperature_2m<=2) prenda='campera de invierno, gorro y guantes';
+  else if(c.temperature_2m<=8) prenda='campera abrigada';
+  else if(c.temperature_2m<=15) prenda='buzo o campera liviana';
+  else if(c.temperature_2m<=24) prenda='manga larga, o remera si hay sol';
+  else prenda='ropa fresca, manga corta';
+  if(c.wind_speed_10m>=35) prenda+=' + algo cortaviento';
+  let frase=prenda.charAt(0).toUpperCase()+prenda.slice(1);
+  frase += vaLlover ? '. Llevá paraguas o impermeable.' : '. No hace falta paraguas.';
+  return frase;
+}
 function _categoriaUV(uv){
   if(uv==null) return null;
   if(uv<3) return {nivel:'ok', texto:'Bajo'};
@@ -559,6 +598,7 @@ async function cargarClimaParaUbicacion(ubicacion){
   UBICACION_ACTIVA=ubicacion;
   try{
     CLIMA_ACTUAL=await _obtenerClima(ubicacion.lat, ubicacion.lon);
+    ULTIMA_ACTUALIZACION_MS=Date.now();
     localStorage.setItem('clima_ultima_ubicacion', JSON.stringify(ubicacion));
     localStorage.setItem('clima_cache', JSON.stringify({clima:CLIMA_ACTUAL, ts:Date.now()}));
     _obtenerCalidadAire(ubicacion.lat, ubicacion.lon).then(a=>{ CALIDAD_AIRE_ACTUAL=a; renderTodo(); }).catch(()=>{ CALIDAD_AIRE_ACTUAL=null; });
@@ -573,7 +613,7 @@ async function cargarClimaParaUbicacion(ubicacion){
     if(!CLIMA_ACTUAL){
       try{
         const cache=JSON.parse(localStorage.getItem('clima_cache')||'null');
-        if(cache && cache.clima) CLIMA_ACTUAL=cache.clima;
+        if(cache && cache.clima){ CLIMA_ACTUAL=cache.clima; ULTIMA_ACTUALIZACION_MS=cache.ts||null; }
       }catch(e2){}
     }
     if(CLIMA_ACTUAL) verificarSaludoDespertador();
@@ -610,13 +650,35 @@ function _categoriaAQI(aqi){
   if(aqi<=300) return {nivel:'bad', texto:'Muy dañina'};
   return {nivel:'bad', texto:'Peligrosa'};
 }
+// busca la ventana horaria real (proximas 30h) donde la temperatura va a estar bajo cero,
+// para poder avisar "entre las X y las Y, minima estimada Z" en vez de solo "hay riesgo de helada"
+function _ventanaHelada(clima){
+  if(!clima || !clima.hourly || !clima.hourly.temperature_2m || !clima.hourly.time) return null;
+  const ahoraMs=Date.now();
+  const horas=clima.hourly.time.map((t,i)=>({t, temp:clima.hourly.temperature_2m[i]}))
+    .filter(h=>{ const ms=new Date(h.t).getTime(); return ms>=ahoraMs-3600000 && ms<=ahoraMs+30*3600000; });
+  const frias=horas.filter(h=>h.temp!=null && h.temp<=0);
+  if(!frias.length) return null;
+  return {inicio:frias[0].t, fin:frias[frias.length-1].t, minima:Math.min(...frias.map(h=>h.temp))};
+}
+// viento Zonda: fenomeno real de la cordillera/Patagonia — viento calido y seco que baja del
+// lado oeste tras cruzar los Andes (efecto foehn). Heuristica: viento fuerte + humedad muy baja
+// + direccion del cuadrante oeste (SO-O-NO), sin necesitar una API especial para detectarlo.
+function _esPosibleZonda(c){
+  if(!c || c.wind_direction_10m==null) return false;
+  const dirOeste = c.wind_direction_10m>=225 && c.wind_direction_10m<=315;
+  return dirOeste && c.wind_speed_10m>=40 && c.relative_humidity_2m<=30;
+}
 function calcularAlertas(clima, aire){
   if(!clima||!clima.current) return [];
   const c=clima.current;
   const alertas=[];
+  if(_esPosibleZonda(c)) alertas.push({tipo:'zonda', nivel:'warn', texto:'Posible viento Zonda — viento cálido y seco desde la cordillera ('+Math.round(c.wind_speed_10m)+' km/h, humedad '+c.relative_humidity_2m+'%)'});
   if(c.wind_speed_10m>=50) alertas.push({tipo:'viento', nivel:'bad', texto:'Viento muy fuerte ('+Math.round(c.wind_speed_10m)+' km/h) — objetos sueltos pueden volar, precaución al manejar'});
   else if(c.wind_speed_10m>=35) alertas.push({tipo:'viento', nivel:'warn', texto:'Viento fuerte ('+Math.round(c.wind_speed_10m)+' km/h)'});
-  if(c.temperature_2m<=0) alertas.push({tipo:'helada', nivel:'bad', texto:'Riesgo de helada ('+c.temperature_2m+'°) — posible hielo en la calzada'});
+  const ventanaHelada=_ventanaHelada(clima);
+  if(ventanaHelada) alertas.push({tipo:'helada', nivel: ventanaHelada.minima<=-3?'bad':'warn', texto:'Riesgo de helada entre las '+fmtHora(ventanaHelada.inicio)+' y las '+fmtHora(ventanaHelada.fin)+' — mínima estimada '+Math.round(ventanaHelada.minima)+'°'});
+  else if(c.temperature_2m<=0) alertas.push({tipo:'helada', nivel:'bad', texto:'Riesgo de helada ('+c.temperature_2m+'°) — posible hielo en la calzada'});
   else if(c.temperature_2m<=3) alertas.push({tipo:'helada', nivel:'warn', texto:'Temperatura cercana a cero ('+c.temperature_2m+'°)'});
   if(c.temperature_2m>=35) alertas.push({tipo:'calor', nivel:'bad', texto:'Calor extremo ('+c.temperature_2m+'°) — hidratate y evitá el sol directo'});
   else if(c.temperature_2m>=30) alertas.push({tipo:'calor', nivel:'warn', texto:'Día caluroso ('+c.temperature_2m+'°)'});
@@ -1262,7 +1324,7 @@ async function _capturarImagenEscena(){
     backgroundColor:null,
     scale:2,
     useCORS:true,
-    ignoreElements:el=>el.classList && el.classList.contains('escena-btn-compartir')
+    ignoreElements:el=>el.classList && (el.classList.contains('escena-btn-compartir') || el.classList.contains('escena-btn-sonido'))
   });
   return new Promise(resolve=>canvas.toBlob(blob=>resolve(blob), 'image/png'));
 }
@@ -1332,12 +1394,34 @@ function renderHome(){
   document.getElementById('home-kpis').innerHTML=
     '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.apparent_temperature)+'°</div><div class="kpi-lbl">Sensación térmica</div></div>'+
     '<div class="kpi-box"><div class="kpi-val">'+c.relative_humidity_2m+'%</div><div class="kpi-lbl">Humedad</div></div>'+
-    '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_speed_10m)+' km/h</div><div class="kpi-lbl">Viento</div></div>'+
+    '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_speed_10m)+' km/h <span style="display:inline-block;transform:rotate('+((c.wind_direction_10m||0)+180)+'deg)">↑</span></div><div class="kpi-lbl">Viento '+_direccionCardinal(c.wind_direction_10m)+'</div></div>'+
     '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_gusts_10m||0)+' km/h</div><div class="kpi-lbl">Ráfagas</div></div>'+
     (catUV ? '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.uv_index)+'</div><div class="kpi-lbl">UV '+catUV.texto+'</div></div>' : '')+
     (presion ? '<div class="kpi-box"><div class="kpi-val">'+Math.round(presion.actual)+' '+flechaPresion+'</div><div class="kpi-lbl">Presión '+presion.tendencia+'</div></div>' : '')+
     (sunrise ? '<div class="kpi-box"><div class="kpi-val">'+fmtHora(sunrise)+'</div><div class="kpi-lbl">🌅 Amanece</div></div>' : '')+
     (sunset ? '<div class="kpi-box"><div class="kpi-val">'+fmtHora(sunset)+'</div><div class="kpi-lbl">🌇 Anochece</div></div>' : '');
+
+  const actualizadoEl=document.getElementById('home-actualizado');
+  if(actualizadoEl){
+    const txt=_tiempoRelativo(ULTIMA_ACTUALIZACION_MS);
+    actualizadoEl.innerHTML = txt ? '<span style="font-size:10px;color:var(--text3)">Actualizado '+txt+'</span>' : '';
+  }
+
+  if(_ambienteEscenaActivo){
+    const claveActual=_categoriaClima(c.weather_code)+'|'+(c.wind_speed_10m>=30);
+    if(claveActual!==_ultimaClaveAmbiente) _iniciarSonidoAmbienteSegunClima();
+  }
+
+  const ropaEl=document.getElementById('home-ropa');
+  if(ropaEl){
+    const sugerencia=_sugerenciaRopa(CLIMA_ACTUAL);
+    if(sugerencia){
+      ropaEl.style.display='';
+      ropaEl.innerHTML='<div class="card" style="display:flex;align-items:center;gap:12px">'+
+        '<div class="row-icon" style="background:rgba(232,163,61,.15)">👕</div>'+
+        '<div class="row-main"><div class="row-title" style="font-weight:600;font-size:13px;white-space:normal">'+esc(sugerencia)+'</div></div></div>';
+    } else { ropaEl.style.display='none'; }
+  }
 
   const aireEl=document.getElementById('home-aire');
   if(aireEl){
@@ -1367,7 +1451,7 @@ function renderHome(){
   document.getElementById('home-alertas').innerHTML=alertas.length ? alertas.map(alertaRowHtml).join('') : '<div class="empty" style="padding:16px 0"><div class="empty-sub">Sin alertas activas</div></div>';
 }
 function alertaRowHtml(a){
-  const icono={viento:'💨',helada:'🥶',calor:'🥵',tormenta:'⛈️',niebla:'🌫️',lluvia:'🌧️',aire:'🌬️',polvo:'🌪️',uv:'🕶️'}[a.tipo]||'⚠️';
+  const icono={viento:'💨',helada:'🥶',calor:'🥵',tormenta:'⛈️',niebla:'🌫️',lluvia:'🌧️',aire:'🌬️',polvo:'🌪️',uv:'🕶️',zonda:'🏔️'}[a.tipo]||'⚠️';
   return '<div class="row-item static"><div class="row-icon" style="background:rgba(59,158,255,.15)">'+icono+'</div><div class="row-main"><div class="row-title">'+esc(a.texto)+'</div></div>'+
     '<div class="row-amt"><div class="row-amt-val '+a.nivel+'">●</div></div></div>';
 }
@@ -1806,6 +1890,70 @@ function _sonidoOlas(ctx){
   noise.start(); lfo.start();
   return ()=>{ noise.stop(); lfo.stop(); };
 }
+// ── sonido ambiente real del clima actual (opcional, mientras mirás la app — no solo en el despertador) ──
+function _sonidoLluviaAmbiente(ctx){
+  const bufferSize=ctx.sampleRate*2;
+  const buffer=ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data=buffer.getChannelData(0);
+  for(let i=0;i<bufferSize;i++) data[i]=Math.random()*2-1;
+  const noise=ctx.createBufferSource(); noise.buffer=buffer; noise.loop=true;
+  const filter=ctx.createBiquadFilter(); filter.type='highpass'; filter.frequency.value=1500;
+  const gain=ctx.createGain(); gain.gain.value=0.045;
+  noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+  noise.start();
+  return ()=>{ noise.stop(); };
+}
+function _sonidoVientoAmbiente(ctx){
+  const bufferSize=ctx.sampleRate*2;
+  const buffer=ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data=buffer.getChannelData(0);
+  for(let i=0;i<bufferSize;i++) data[i]=Math.random()*2-1;
+  const noise=ctx.createBufferSource(); noise.buffer=buffer; noise.loop=true;
+  const filter=ctx.createBiquadFilter(); filter.type='bandpass'; filter.frequency.value=400; filter.Q.value=0.6;
+  const gain=ctx.createGain(); gain.gain.value=0.05;
+  const lfo=ctx.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.2;
+  const lfoGain=ctx.createGain(); lfoGain.gain.value=220;
+  lfo.connect(lfoGain); lfoGain.connect(filter.frequency);
+  noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+  noise.start(); lfo.start();
+  return ()=>{ noise.stop(); lfo.stop(); };
+}
+let _ambienteEscenaCtx=null, _ambienteEscenaDetener=null, _ambienteEscenaActivo=false, _ultimaClaveAmbiente=null;
+function _detenerSonidoAmbiente(){
+  if(_ambienteEscenaDetener){ _ambienteEscenaDetener(); _ambienteEscenaDetener=null; }
+  if(_ambienteEscenaCtx){ const c=_ambienteEscenaCtx; _ambienteEscenaCtx=null; setTimeout(()=>{ try{ c.close(); }catch(e){} }, 300); }
+  _ultimaClaveAmbiente=null;
+}
+function _iniciarSonidoAmbienteSegunClima(){
+  _detenerSonidoAmbiente();
+  if(!CLIMA_ACTUAL || !_ambienteEscenaActivo) return;
+  const c=CLIMA_ACTUAL.current;
+  const categoria=_categoriaClima(c.weather_code);
+  const vientoFuerte=c.wind_speed_10m>=30;
+  const claveAmbiente=categoria+'|'+vientoFuerte;
+  _ultimaClaveAmbiente=claveAmbiente;
+  if(!['lluvia','tormenta'].includes(categoria) && !vientoFuerte){
+    _ambienteEscenaActivo=false;
+    const btn=document.getElementById('btn-sonido-ambiente'); if(btn) btn.classList.remove('activo');
+    toast('🔇 Hoy está tranquilo, no hay sonido de ambiente para este clima');
+    return;
+  }
+  try{
+    _ambienteEscenaCtx=new (window.AudioContext||window.webkitAudioContext)();
+    _ambienteEscenaDetener = ['lluvia','tormenta'].includes(categoria) ? _sonidoLluviaAmbiente(_ambienteEscenaCtx) : _sonidoVientoAmbiente(_ambienteEscenaCtx);
+  }catch(e){}
+}
+function toggleSonidoAmbiente(){
+  _ambienteEscenaActivo=!_ambienteEscenaActivo;
+  const btn=document.getElementById('btn-sonido-ambiente');
+  if(_ambienteEscenaActivo){
+    _iniciarSonidoAmbienteSegunClima();
+    if(_ambienteEscenaActivo && btn) btn.classList.add('activo');
+  } else {
+    _detenerSonidoAmbiente();
+    if(btn) btn.classList.remove('activo');
+  }
+}
 let _ambienteCtx=null, _ambienteDetener=null, _audioPersonalizado=null;
 async function _reproducirSonidoPersonalizado(){
   try{
@@ -2020,6 +2168,14 @@ setInterval(async ()=>{
     await cargarClimaParaUbicacion(UBICACION_ACTIVA); // refresca el clima real justo antes y dispara el saludo
   }
 }, 30000);
+// refresca solo el texto "actualizado hace X" mientras estás mirando Inicio, sin volver a pedir datos
+setInterval(()=>{
+  if(document.hidden || _pagActual!=='home') return;
+  const el=document.getElementById('home-actualizado');
+  if(!el) return;
+  const txt=_tiempoRelativo(ULTIMA_ACTUALIZACION_MS);
+  el.innerHTML = txt ? '<span style="font-size:10px;color:var(--text3)">Actualizado '+txt+'</span>' : '';
+}, 60000);
 
 // ═══════════════════════════════════════════════════════════════
 // PULL TO REFRESH
