@@ -168,6 +168,11 @@
   .nowcast-title{font-size:13.5px;font-weight:800;line-height:1.3}
   .nowcast-sub{font-size:10.5px;color:var(--text3);margin-top:3px}
 
+  .saludo-visual-card{background:rgba(245,184,61,.13);border:1px solid rgba(245,184,61,.4);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+  .saludo-visual-texto{font-size:13.5px;font-weight:600;line-height:1.45}
+  .saludo-visual-stop{align-self:flex-start;padding:6px 14px;border-radius:99px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:700}
+  .saludo-visual-stop:active{background:var(--card)}
+
   body.a11y-grande{zoom:1.16}
   body.a11y-contraste{zoom:1.3}
   :root[data-contraste="alto"]{--text2:var(--text);--text3:var(--text2)}
@@ -245,6 +250,7 @@
     </div>
   </div>
   <div class="section" style="text-align:center;margin-top:-6px" id="home-actualizado"></div>
+  <div class="section" id="home-saludo-visual" style="display:none"></div>
   <div class="section" id="home-nowcast" style="display:none"></div>
   <div class="section" style="text-align:center">
     <span class="safety-badge ok" id="home-safety-badge">Cargando...</span>
@@ -333,6 +339,8 @@
     <div class="field-wrap"><div class="field-label">Tu nombre</div><input class="input" id="desp-nombre" placeholder="Ej: Fernando"></div>
     <div class="field-wrap"><div class="field-label">Frase para despertarte</div><input class="input" id="desp-frase" placeholder="Es hora de levantarse"></div>
     <div class="field-wrap"><div class="field-label">Hora aproximada</div><input type="time" class="input" id="desp-hora"></div>
+    <button class="btn-secondary" onclick="abrirAlarmaNativa()">⏰ Abrir también en el reloj del celular</button>
+    <div class="field-wrap"><div class="field-label">Días</div><div class="pill-row" id="desp-dias-pills"></div></div>
     <div class="field-wrap"><div class="field-label">Repetir el aviso (por si no lo escuchás)</div><div class="pill-row" id="desp-repetir-pills"></div></div>
     <div class="field-wrap"><div class="field-label">Voz</div>
       <div class="pill-row" id="desp-genero-voz-pills" style="margin-bottom:8px"></div>
@@ -2145,9 +2153,15 @@ function _puedeSaludarAhora(config){
   if(repetirMin>0) return _minutosDesdeUltimoSaludo()>=repetirMin;
   return !_yaSaludoHoy();
 }
+function _diaValidoParaSaludo(config){
+  if(!config.soloSemana) return true;
+  const dia=new Date().getDay(); // 0=domingo,6=sabado
+  return dia>=1 && dia<=5;
+}
 function verificarSaludoDespertador(){
   const config=JSON.parse(localStorage.getItem('clima_despertador')||'null');
   if(!config || !config.activo || !config.hora) return;
+  if(!_diaValidoParaSaludo(config)) return;
   if(!_puedeSaludarAhora(config)) return;
   const ahora=new Date();
   const [hConfig,mConfig]=config.hora.split(':').map(Number);
@@ -2155,10 +2169,45 @@ function verificarSaludoDespertador(){
   const minutosActual=ahora.getHours()*60+ahora.getMinutes();
   if(minutosActual>=minutosConfig && minutosActual<=minutosConfig+90) ejecutarSaludoDespertador();
 }
+// alarma NATIVA del telefono con el mismo horario configurado (ademas del saludo con voz, no
+// en vez de) — usa un intent de Android para abrir directo la pantalla de "nueva alarma" del
+// reloj del sistema. Depende del modelo/app de reloj del celular, no es 100% garantizado en
+// todos los Android, pero si no funciona simplemente no pasa nada (fallback a la propia app).
+function abrirAlarmaNativa(){
+  const horaVal=document.getElementById('desp-hora').value||'07:00';
+  const partes=horaVal.split(':').map(Number);
+  const h=partes[0]||7, m=partes[1]||0;
+  const fallback=encodeURIComponent(location.href);
+  const uri='intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.alarm.HOUR='+h+';i.android.intent.extra.alarm.MINUTES='+m+';S.android.intent.extra.alarm.MESSAGE='+encodeURIComponent('Frigurso Clima')+';S.browser_fallback_url='+fallback+';end';
+  window.location.href=uri;
+}
+// confirmacion visual del saludo: aparece siempre, hable o no hable la voz (por si el celular
+// bloquea el audio sin avisar) — con boton para cortar el saludo si es mal momento
+let _saludoVisualTimeout=null;
+function mostrarSaludoVisual(mensaje){
+  const el=document.getElementById('home-saludo-visual');
+  if(!el) return;
+  el.style.display='';
+  el.innerHTML='<div class="saludo-visual-card"><div class="saludo-visual-texto">☀️ '+esc(mensaje)+'</div>'+
+    '<button class="saludo-visual-stop" onclick="detenerSaludoAhora()">🔇 Cortar</button></div>';
+  clearTimeout(_saludoVisualTimeout);
+  _saludoVisualTimeout=setTimeout(ocultarSaludoVisual, 25000);
+}
+function ocultarSaludoVisual(){
+  const el=document.getElementById('home-saludo-visual');
+  if(el){ el.style.display='none'; el.innerHTML=''; }
+  clearTimeout(_saludoVisualTimeout);
+}
+function detenerSaludoAhora(){
+  if('speechSynthesis' in window) window.speechSynthesis.cancel();
+  detenerMusicaSuave();
+  ocultarSaludoVisual();
+}
 function ejecutarSaludoDespertador(){
   if(!CLIMA_ACTUAL) return;
   const config=JSON.parse(localStorage.getItem('clima_despertador')||'null');
   const mensaje=generarMensajeDespertador(config?config.nombre:'', CLIMA_ACTUAL, config?config.frase:'');
+  mostrarSaludoVisual(mensaje);
   iniciarMusicaSuave();
   setTimeout(()=>{ hablarSaludo(mensaje); }, 900);
   localStorage.setItem('clima_ultimo_saludo', String(Date.now()));
@@ -2177,6 +2226,14 @@ const REPETIR_OPCIONES=[
   {id:'20', nombre:'Cada 20 min'},
   {id:'30', nombre:'Cada 30 min'},
 ];
+const DIAS_OPCIONES=[{id:'todos',nombre:'Todos los días'},{id:'semana',nombre:'Solo días de semana'}];
+let _diasSel='todos';
+function renderDiasPills(){
+  document.getElementById('desp-dias-pills').innerHTML=DIAS_OPCIONES.map(o=>
+    '<button class="pill '+(o.id===_diasSel?'sel':'')+'" onclick="elegirDiasDespertador(\''+o.id+'\')">'+o.nombre+'</button>'
+  ).join('');
+}
+function elegirDiasDespertador(id){ _diasSel=id; renderDiasPills(); }
 let _repetirSel='';
 function renderRepetirPills(){
   document.getElementById('desp-repetir-pills').innerHTML=REPETIR_OPCIONES.map(o=>
@@ -2216,6 +2273,8 @@ function abrirModalDespertador(){
   document.getElementById('desp-sonido-propio-nombre').textContent='';
   _repetirSel=config.repetir||'';
   renderRepetirPills();
+  _diasSel=config.soloSemana?'semana':'todos';
+  renderDiasPills();
   abrirModal('despertador');
 }
 function toggleDespertadorActivo(){
@@ -2233,7 +2292,8 @@ function guardarDespertador(){
   const vozGenero=voz ? _generoVoz(voz) : '';
   const sonido=_sonidoSel;
   const repetir=_repetirSel;
-  localStorage.setItem('clima_despertador', JSON.stringify({activo,nombre,frase,hora,voz,vozGenero,sonido,repetir}));
+  const soloSemana=_diasSel==='semana';
+  localStorage.setItem('clima_despertador', JSON.stringify({activo,nombre,frase,hora,voz,vozGenero,sonido,repetir,soloSemana}));
   cerrarModal('despertador');
   toast('✅ Guardado');
 }
@@ -2288,7 +2348,7 @@ document.addEventListener('visibilitychange', async ()=>{
 setInterval(async ()=>{
   if(document.hidden || !UBICACION_ACTIVA) return;
   const config=JSON.parse(localStorage.getItem('clima_despertador')||'null');
-  if(!config || !config.activo || !config.hora || !_puedeSaludarAhora(config)) return;
+  if(!config || !config.activo || !config.hora || !_diaValidoParaSaludo(config) || !_puedeSaludarAhora(config)) return;
   const ahora=new Date();
   const [hConfig,mConfig]=config.hora.split(':').map(Number);
   const minutosConfig=hConfig*60+mConfig;
