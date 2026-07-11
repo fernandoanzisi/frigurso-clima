@@ -388,6 +388,16 @@
 // UTILS
 // ═══════════════════════════════════════════════════════════════
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+// fetch() del navegador NO tiene limite de tiempo por defecto — si la conexion se cuelga
+// (senal debil, celular viejo, wifi rara) se queda esperando una respuesta que puede no
+// llegar NUNCA, y toda la app queda pegada sin forma de recuperarse. Con esto, a los 13s
+// se cancela solo y el try/catch de quien lo llama puede reaccionar (usar cache, avisar, etc).
+async function _fetchConTimeout(url, ms){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(), ms||13000);
+  try{ return await fetch(url, {signal:controller.signal}); }
+  finally{ clearTimeout(timer); }
+}
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 let _toastT;
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>el.classList.remove('show'),2600); }
@@ -509,7 +519,7 @@ async function _obtenerClima(lat, lon){
     '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,visibility,uv_index,surface_pressure'+
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,sunrise,sunset,uv_index_max'+
     '&timezone=auto&forecast_days=16&past_hours=6';
-  const res=await fetch(url);
+  const res=await _fetchConTimeout(url);
   return res.json();
 }
 // UV: categorias oficiales de la OMS
@@ -631,7 +641,7 @@ function _tendenciaPresion(clima){
 async function _obtenerCalidadAire(lat, lon){
   const url='https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+lat+'&longitude='+lon+
     '&current=pm10,pm2_5,us_aqi,ozone,dust&timezone=auto';
-  const res=await fetch(url);
+  const res=await _fetchConTimeout(url);
   const data=await res.json();
   return data.current||null;
 }
@@ -641,7 +651,7 @@ async function _obtenerCalidadAire(lat, lon){
 async function _obtenerNowcast15(lat, lon){
   const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+
     '&minutely_15=precipitation,weather_code&forecast_minutely_15=24&timezone=auto';
-  const res=await fetch(url);
+  const res=await _fetchConTimeout(url);
   const data=await res.json();
   return data.minutely_15||null;
 }
@@ -680,7 +690,7 @@ async function _obtenerHistoricoMismaFecha(lat, lon){
   const fecha=_fechaHace1Anio();
   const url='https://archive-api.open-meteo.com/v1/archive?latitude='+lat+'&longitude='+lon+
     '&start_date='+fecha+'&end_date='+fecha+'&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto';
-  const res=await fetch(url);
+  const res=await _fetchConTimeout(url);
   const data=await res.json();
   const d=data.daily;
   if(!d || !d.time || !d.time.length) return null;
@@ -690,14 +700,14 @@ async function _obtenerHistoricoMismaFecha(lat, lon){
 }
 async function _reverseGeocode(lat, lon){
   try{
-    const res=await fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lon+'&format=json&accept-language=es');
+    const res=await _fetchConTimeout('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lon+'&format=json&accept-language=es', 6000);
     const data=await res.json();
     const a=data.address||{};
     return a.city||a.town||a.village||a.suburb||a.county||data.display_name||'Mi ubicación';
   }catch(e){ return 'Mi ubicación'; }
 }
 async function _buscarLugarGeocoding(query){
-  const res=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(query)+'&count=6&language=es&format=json');
+  const res=await _fetchConTimeout('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(query)+'&count=6&language=es&format=json');
   const data=await res.json();
   return (data.results||[]).map(r=>({nombre:r.name+(r.admin1?', '+r.admin1:'')+(r.country?', '+r.country:''), lat:r.latitude, lon:r.longitude}));
 }
@@ -725,12 +735,31 @@ async function cargarClimaParaUbicacion(ubicacion){
         if(cache && cache.clima){ CLIMA_ACTUAL=cache.clima; ULTIMA_ACTUALIZACION_MS=cache.ts||null; }
       }catch(e2){}
     }
-    if(CLIMA_ACTUAL) verificarSaludoDespertador();
+    if(CLIMA_ACTUAL){
+      renderTodo(); // aunque sea con el cache viejo, que se vea en pantalla en vez de dejar el spinner pegado
+      verificarSaludoDespertador();
+    } else {
+      // primera vez que se abre la app y la conexion no responde: no hay NADA guardado para
+      // mostrar. Antes esto dejaba el spinner girando para siempre sin salida — ahora se
+      // reemplaza por un boton de reintentar, bien visible, sin depender de un toast que se pierde
+      _mostrarErrorCargaClima();
+    }
   }
+}
+function _mostrarErrorCargaClima(){
+  const el=document.getElementById('escena-cargando');
+  if(!el) return;
+  el.classList.remove('oculto');
+  el.innerHTML='<div class="escena-cargando-txt">⚠️ No se pudo cargar el clima</div>'+
+    '<button class="btn-secondary" style="width:auto;padding:8px 18px;margin:0" onclick="actualizarClima()">🔄 Reintentar</button>';
 }
 async function actualizarClima(){
   if(!UBICACION_ACTIVA) return;
   toast('🔄 Actualizando...');
+  const cargandoEl=document.getElementById('escena-cargando');
+  if(cargandoEl && !cargandoEl.classList.contains('oculto')){
+    cargandoEl.innerHTML='<div class="spinner"></div><div class="escena-cargando-txt">Buscando el clima real...</div>';
+  }
   await cargarClimaParaUbicacion(UBICACION_ACTIVA);
 }
 // si el GPS nunca responde (pasa de verdad en navegadores "adentro" de WhatsApp/Instagram/etc,
@@ -1731,7 +1760,7 @@ function _cargarLugares(){ try{ LUGARES=JSON.parse(localStorage.getItem('clima_l
 function _guardarLugares(){ localStorage.setItem('clima_lugares', JSON.stringify(LUGARES)); }
 async function _obtenerClimaMini(lat, lon){
   const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,weather_code&timezone=auto';
-  const res=await fetch(url);
+  const res=await _fetchConTimeout(url);
   const data=await res.json();
   return data.current||null;
 }
@@ -1833,7 +1862,7 @@ function _cargarLeaflet(){
 }
 let _radarMap=null, _radarFrames=[], _radarFramesTs=0, _radarFrameIdx=0, _radarTileLayer=null, _radarPlaying=false, _radarTimer=null, _radarHost='';
 async function _obtenerFramesRadar(){
-  const res=await fetch('https://api.rainviewer.com/public/weather-maps.json');
+  const res=await _fetchConTimeout('https://api.rainviewer.com/public/weather-maps.json');
   const data=await res.json();
   _radarHost=data.host;
   const past=((data.radar&&data.radar.past)||[]).map(f=>({...f,esFuturo:false}));
