@@ -439,12 +439,46 @@ let LUGARES=[];
 
 async function _obtenerClima(lat, lon){
   const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+
-    '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure'+
-    '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,visibility,uv_index'+
+    '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,uv_index'+
+    '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,visibility,uv_index,surface_pressure'+
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,sunrise,sunset,uv_index_max'+
-    '&timezone=auto&forecast_days=16';
+    '&timezone=auto&forecast_days=16&past_hours=6';
   const res=await fetch(url);
   return res.json();
+}
+// UV: categorias oficiales de la OMS
+function _categoriaUV(uv){
+  if(uv==null) return null;
+  if(uv<3) return {nivel:'ok', texto:'Bajo'};
+  if(uv<6) return {nivel:'ok', texto:'Moderado'};
+  if(uv<8) return {nivel:'warn', texto:'Alto'};
+  if(uv<11) return {nivel:'warn', texto:'Muy alto'};
+  return {nivel:'bad', texto:'Extremo'};
+}
+// fase lunar en palabras, para acompañar el dibujo de la luna en la escena
+function _nombreFaseLunar(fase){
+  if(fase<0.03 || fase>0.97) return 'Luna nueva';
+  if(fase<0.22) return 'Luna creciente';
+  if(fase<0.28) return 'Cuarto creciente';
+  if(fase<0.47) return 'Luna creciente gibosa';
+  if(fase<0.53) return 'Luna llena';
+  if(fase<0.72) return 'Luna menguante gibosa';
+  if(fase<0.78) return 'Cuarto menguante';
+  return 'Luna menguante';
+}
+// tendencia real de presión atmosférica (comparando contra 3hs atrás) — bajando sostenido
+// suele anticipar mal tiempo, es una señal clasica que casi ninguna app muestra
+function _tendenciaPresion(clima){
+  if(!clima || !clima.hourly || !clima.hourly.surface_pressure || !clima.hourly.time) return null;
+  const ahoraMs=Date.now();
+  const idx=clima.hourly.time.findIndex(t=>new Date(t).getTime()>=ahoraMs);
+  if(idx<3) return null;
+  const actual=clima.hourly.surface_pressure[idx];
+  const hace3h=clima.hourly.surface_pressure[idx-3];
+  if(actual==null || hace3h==null) return null;
+  const diff=Math.round((actual-hace3h)*10)/10;
+  const tendencia = diff>=1 ? 'subiendo' : diff<=-1 ? 'bajando' : 'estable';
+  return {tendencia, diff, actual};
 }
 // calidad del aire real (Open-Meteo Air Quality, gratis sin key). El polen solo cubre Europa,
 // asi que no lo pedimos — para Argentina/Patagonia vendria vacio y seria informacion falsa.
@@ -590,6 +624,9 @@ function calcularAlertas(clima, aire){
   if(categoria==='tormenta') alertas.push({tipo:'tormenta', nivel:'bad', texto:'Tormenta eléctrica — evitá refugiarte bajo árboles'});
   if(categoria==='niebla') alertas.push({tipo:'niebla', nivel:'warn', texto:'Niebla — visibilidad reducida, manejá con luces bajas'});
   if(c.precipitation>=8) alertas.push({tipo:'lluvia', nivel:'bad', texto:'Lluvia intensa — las calles pueden anegarse'});
+  const catUV=_categoriaUV(c.uv_index);
+  if(catUV && catUV.nivel==='bad') alertas.push({tipo:'uv', nivel:'bad', texto:'Sol extremo (UV '+Math.round(c.uv_index)+') — evitá el sol del mediodía, usá protección alta'});
+  else if(catUV && catUV.nivel==='warn' && c.uv_index>=8) alertas.push({tipo:'uv', nivel:'warn', texto:'Sol muy fuerte (UV '+Math.round(c.uv_index)+') — protector solar, sombrero y anteojos'});
   if(aire){
     const cat=_categoriaAQI(aire.us_aqi);
     if(cat && cat.nivel!=='ok') alertas.push({tipo:'aire', nivel:cat.nivel, texto:'Calidad del aire: '+cat.texto.toLowerCase()+' (AQI '+Math.round(aire.us_aqi)+')'});
@@ -1158,7 +1195,12 @@ function aplicarEscena(){
   if(categoria==='tormenta') iniciarRelampagos(); else detenerRelampagos();
 
   const tempEl=document.getElementById('escena-temp'); if(tempEl) tempEl.textContent=Math.round(c.temperature_2m)+'°';
-  const descEl=document.getElementById('escena-desc'); if(descEl) descEl.textContent=_descripcionClima(c.weather_code);
+  const descEl=document.getElementById('escena-desc');
+  if(descEl){
+    let descTxt=_descripcionClima(c.weather_code);
+    if(!esDia && (categoria==='despejado'||categoria==='parcial')) descTxt+=' · '+_nombreFaseLunar(_faseLunar(new Date()));
+    descEl.textContent=descTxt;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1282,11 +1324,20 @@ function renderHome(){
   badge.textContent=seg.mensaje;
 
   const c=CLIMA_ACTUAL.current;
+  const catUV=_categoriaUV(c.uv_index);
+  const presion=_tendenciaPresion(CLIMA_ACTUAL);
+  const flechaPresion = presion ? {subiendo:'↑',bajando:'↓',estable:'→'}[presion.tendencia] : '';
+  const sunrise=CLIMA_ACTUAL.daily&&CLIMA_ACTUAL.daily.sunrise?CLIMA_ACTUAL.daily.sunrise[0]:null;
+  const sunset=CLIMA_ACTUAL.daily&&CLIMA_ACTUAL.daily.sunset?CLIMA_ACTUAL.daily.sunset[0]:null;
   document.getElementById('home-kpis').innerHTML=
     '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.apparent_temperature)+'°</div><div class="kpi-lbl">Sensación térmica</div></div>'+
     '<div class="kpi-box"><div class="kpi-val">'+c.relative_humidity_2m+'%</div><div class="kpi-lbl">Humedad</div></div>'+
     '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_speed_10m)+' km/h</div><div class="kpi-lbl">Viento</div></div>'+
-    '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_gusts_10m||0)+' km/h</div><div class="kpi-lbl">Ráfagas</div></div>';
+    '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_gusts_10m||0)+' km/h</div><div class="kpi-lbl">Ráfagas</div></div>'+
+    (catUV ? '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.uv_index)+'</div><div class="kpi-lbl">UV '+catUV.texto+'</div></div>' : '')+
+    (presion ? '<div class="kpi-box"><div class="kpi-val">'+Math.round(presion.actual)+' '+flechaPresion+'</div><div class="kpi-lbl">Presión '+presion.tendencia+'</div></div>' : '')+
+    (sunrise ? '<div class="kpi-box"><div class="kpi-val">'+fmtHora(sunrise)+'</div><div class="kpi-lbl">🌅 Amanece</div></div>' : '')+
+    (sunset ? '<div class="kpi-box"><div class="kpi-val">'+fmtHora(sunset)+'</div><div class="kpi-lbl">🌇 Anochece</div></div>' : '');
 
   const aireEl=document.getElementById('home-aire');
   if(aireEl){
@@ -1316,7 +1367,7 @@ function renderHome(){
   document.getElementById('home-alertas').innerHTML=alertas.length ? alertas.map(alertaRowHtml).join('') : '<div class="empty" style="padding:16px 0"><div class="empty-sub">Sin alertas activas</div></div>';
 }
 function alertaRowHtml(a){
-  const icono={viento:'💨',helada:'🥶',calor:'🥵',tormenta:'⛈️',niebla:'🌫️',lluvia:'🌧️',aire:'🌬️',polvo:'🌪️'}[a.tipo]||'⚠️';
+  const icono={viento:'💨',helada:'🥶',calor:'🥵',tormenta:'⛈️',niebla:'🌫️',lluvia:'🌧️',aire:'🌬️',polvo:'🌪️',uv:'🕶️'}[a.tipo]||'⚠️';
   return '<div class="row-item static"><div class="row-icon" style="background:rgba(59,158,255,.15)">'+icono+'</div><div class="row-main"><div class="row-title">'+esc(a.texto)+'</div></div>'+
     '<div class="row-amt"><div class="row-amt-val '+a.nivel+'">●</div></div></div>';
 }
