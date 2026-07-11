@@ -377,6 +377,12 @@
     <div class="field-wrap"><div class="field-label">Tema</div><div class="pill-row" id="config-tema-pills"></div></div>
     <div class="field-wrap"><div class="field-label">Tamaño de letra / contraste</div><div class="pill-row" id="config-a11y-pills"></div></div>
     <button class="btn-secondary" onclick="cerrarModal('config');abrirModalDespertador()">⏰ Despertador con voz</button>
+    <div class="field-wrap"><div class="field-label">Backup</div></div>
+    <button class="btn-secondary" onclick="exportarBackupClima()">📦 Exportar backup</button>
+    <label class="btn-secondary" style="display:block;text-align:center">
+      📥 Sumar backup de otro dispositivo
+      <input type="file" accept=".figclima" style="display:none" onchange="importarBackupClima(event)">
+    </label>
     <button class="btn-ghost" onclick="cerrarModal('config')">Cerrar</button>
   </div>
 </div>
@@ -1758,6 +1764,62 @@ function renderAlertas(){
 // ═══════════════════════════════════════════════════════════════
 function _cargarLugares(){ try{ LUGARES=JSON.parse(localStorage.getItem('clima_lugares')||'[]'); }catch(e){ LUGARES=[]; } }
 function _guardarLugares(){ localStorage.setItem('clima_lugares', JSON.stringify(LUGARES)); }
+
+// ═══════════════════════════════════════════════════════════════
+// BACKUP / RESTORE (sin encriptar — esta app no tiene login)
+// ═══════════════════════════════════════════════════════════════
+function exportarBackupClima(){
+  let lugares; try{ lugares=JSON.parse(localStorage.getItem('clima_lugares')||'[]'); }catch(e){ lugares=[]; }
+  let diarioHistorial; try{ diarioHistorial=JSON.parse(localStorage.getItem('clima_diario_historial')||'{}'); }catch(e){ diarioHistorial={}; }
+  let despertador=null; try{ despertador=JSON.parse(localStorage.getItem('clima_despertador')||'null'); }catch(e){}
+  const paquete={ lugares, diarioHistorial, despertador, exportadoEn:new Date().toISOString() };
+  const json=JSON.stringify(paquete);
+  const url=URL.createObjectURL(new Blob([json],{type:'application/json'}));
+  const a=document.createElement('a'); a.href=url;
+  a.download='frigurso-clima-backup-'+fechaHoy()+'.figclima';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('📦 Backup exportado');
+}
+// Fusiona el paquete importado con lo que ya hay guardado: agrega lugares y días nuevos
+// del historial por id/fecha, nunca pisa ni borra lo que ya está. Devuelve cuántos sumó.
+function _fusionarBackupClima(paquete){
+  let agregados=0;
+  let lugares; try{ lugares=JSON.parse(localStorage.getItem('clima_lugares')||'[]'); }catch(e){ lugares=[]; }
+  if(Array.isArray(paquete.lugares)){
+    const idsActuales=new Set(lugares.map(l=>l.id));
+    paquete.lugares.forEach(l=>{ if(l&&l.id&&!idsActuales.has(l.id)){ lugares.push(l); idsActuales.add(l.id); agregados++; } });
+    localStorage.setItem('clima_lugares', JSON.stringify(lugares));
+  }
+  let historial; try{ historial=JSON.parse(localStorage.getItem('clima_diario_historial')||'{}'); }catch(e){ historial={}; }
+  if(paquete.diarioHistorial && typeof paquete.diarioHistorial==='object'){
+    Object.keys(paquete.diarioHistorial).forEach(fecha=>{
+      if(!(fecha in historial)){ historial[fecha]=paquete.diarioHistorial[fecha]; agregados++; }
+    });
+    localStorage.setItem('clima_diario_historial', JSON.stringify(historial));
+  }
+  if(paquete.despertador && !localStorage.getItem('clima_despertador')){
+    localStorage.setItem('clima_despertador', JSON.stringify(paquete.despertador));
+    agregados++;
+  }
+  return agregados;
+}
+function importarBackupClima(e){
+  const file=e.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=(ev)=>{
+    try{
+      const paquete=JSON.parse(ev.target.result);
+      const agregados=_fusionarBackupClima(paquete);
+      _cargarLugares();
+      if(typeof renderLugares==='function') renderLugares();
+      toast(agregados>0 ? '✅ Se sumaron '+agregados+' datos nuevos' : 'ℹ️ Ya tenías todo lo de ese backup');
+    }catch(err){ toast('❌ Archivo inválido'); }
+    finally{ e.target.value=''; }
+  };
+  reader.readAsText(file);
+}
 async function _obtenerClimaMini(lat, lon){
   const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,weather_code&timezone=auto';
   const res=await _fetchConTimeout(url);
