@@ -421,7 +421,6 @@ function toggleTema(){
 }
 function fechaHoy(){ const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0'); }
 function fmtHora(iso){ const d=new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
-function fmtDiaSemana(iso){ const dias=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']; return dias[new Date(iso+'T12:00:00').getDay()]; }
 const _DIAS_LARGO=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 // etiqueta clara de fecha: "Hoy 10-7-26" / "Mañana 11-7-26" / "Sábado 12-7-26"...
 function _etiquetaFechaDesdeDate(d){
