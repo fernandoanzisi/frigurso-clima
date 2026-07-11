@@ -251,8 +251,10 @@
   </div>
   <div class="kpi-grid" id="home-kpis"></div>
   <div class="section" id="home-ropa" style="display:none"></div>
+  <div class="section" id="home-lluvia-mini" style="display:none;margin-top:10px"></div>
   <div class="section" id="home-aire" style="display:none"></div>
   <div class="section"><div class="section-title">Próximas horas</div><div class="pill-row" id="home-horas"></div></div>
+  <div class="section" style="margin-top:14px"><div class="section-title">Próximos días</div><div class="pill-row" id="home-dias-resumen"></div></div>
   <div class="section" style="margin-top:14px"><div class="section-title">Alertas activas</div><div id="home-alertas"></div></div>
 </div>
 
@@ -282,8 +284,10 @@
       <div id="alertas-safety-razones" style="font-size:12px;color:var(--text3);text-align:left"></div>
     </div>
   </div>
+  <div class="section" id="alertas-mejor-momento" style="display:none"></div>
   <div class="section"><div class="section-title">Alertas activas</div><div id="alertas-lista"></div></div>
   <div class="section" style="margin-top:10px"><div class="card" style="font-size:11px;color:var(--text3)">Estas alertas se calculan a partir de datos meteorológicos reales (viento, temperatura, precipitación) con umbrales generales. No reemplazan a un alerta meteorológico oficial de tu país.</div></div>
+  <div class="section" id="alertas-diario" style="margin-top:14px;display:none"></div>
 </div>
 
 <!-- LUGARES -->
@@ -361,9 +365,22 @@ let _toastT;
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>el.classList.remove('show'),2600); }
 // ── tema claro/oscuro: por defecto sigue al sistema, pero se puede forzar y queda guardado ──
 function _sistemaPrefiereClaro(){ return typeof matchMedia!=='undefined' && matchMedia('(prefers-color-scheme: light)').matches; }
+// de noche/dia real segun el amanecer/atardecer de TU ubicacion (no la hora del sistema) —
+// null si todavia no cargamos el clima real, para caer al criterio del sistema mientras tanto
+function _esNocheLocal(){
+  if(typeof CLIMA_ACTUAL==='undefined' || !CLIMA_ACTUAL || !CLIMA_ACTUAL.daily || !CLIMA_ACTUAL.daily.sunrise || !CLIMA_ACTUAL.daily.sunset) return null;
+  const ahora=Date.now();
+  const sunrise=new Date(CLIMA_ACTUAL.daily.sunrise[0]).getTime();
+  const sunset=new Date(CLIMA_ACTUAL.daily.sunset[0]).getTime();
+  if(isNaN(sunrise)||isNaN(sunset)) return null;
+  return ahora<sunrise || ahora>sunset;
+}
 function aplicarTema(){
   const t=localStorage.getItem('clima_tema')||'auto';
-  const esClaro = t==='light' || (t==='auto' && _sistemaPrefiereClaro());
+  let esClaro;
+  if(t==='light') esClaro=true;
+  else if(t==='dark') esClaro=false;
+  else { const noche=_esNocheLocal(); esClaro = noche!=null ? !noche : _sistemaPrefiereClaro(); }
   document.documentElement.setAttribute('data-theme', esClaro?'light':'dark');
   const btn=document.getElementById('btn-tema');
   if(btn) btn.textContent = esClaro ? '🌙' : '☀️';
@@ -486,6 +503,63 @@ function _sugerenciaRopa(clima){
   frase += vaLlover ? '. Llevá paraguas o impermeable.' : '. No hace falta paraguas.';
   return frase;
 }
+// "mejor momento para salir hoy": puntua cada hora restante del dia (lluvia, viento, temp, UV)
+// y devuelve la ventana de 2hs con mejor puntaje — no solo "es seguro si/no" sino CUANDO
+function _mejorMomentoSalir(clima){
+  if(!clima || !clima.hourly || !clima.hourly.time) return null;
+  const ahoraMs=Date.now();
+  const horas=clima.hourly.time.map((t,i)=>({
+    t, temp:clima.hourly.temperature_2m[i], precipProb:clima.hourly.precipitation_probability[i]||0,
+    viento:clima.hourly.wind_speed_10m[i]||0, uv:clima.hourly.uv_index?clima.hourly.uv_index[i]:0
+  })).filter(h=>{ const ms=new Date(h.t).getTime(); return ms>=ahoraMs && ms<=ahoraMs+14*3600000; });
+  if(horas.length<2) return null;
+  horas.forEach(h=>{
+    let p=100;
+    p-=h.precipProb*1.2;
+    if(h.viento>=35) p-=30; else if(h.viento>=20) p-=12;
+    if(h.temp<=2||h.temp>=33) p-=25; else if(h.temp<=6||h.temp>=30) p-=10;
+    if(h.uv>=9) p-=15;
+    h.score=p;
+  });
+  let mejorIdx=0, mejorScore=-Infinity;
+  for(let i=0;i<horas.length-1;i++){
+    const prom=(horas[i].score+horas[i+1].score)/2;
+    if(prom>mejorScore){ mejorScore=prom; mejorIdx=i; }
+  }
+  if(mejorScore<40) return null;
+  return {inicio:horas[mejorIdx].t, fin:horas[mejorIdx+1].t};
+}
+// diario personal del clima: cada dia se va guardando en TU telefono lo que realmente paso
+// (minima/maxima observadas, si llovio) — con el tiempo arma un registro propio, unico de cada
+// usuario, algo que ninguna app de clima "de afuera" puede ofrecer porque no tiene tu historial.
+function _registrarDiaClima(){
+  if(!CLIMA_ACTUAL || !CLIMA_ACTUAL.current) return;
+  const c=CLIMA_ACTUAL.current;
+  const hoy=fechaHoy();
+  let historial; try{ historial=JSON.parse(localStorage.getItem('clima_diario_historial')||'{}'); }catch(e){ historial={}; }
+  const existente=historial[hoy]||{min:c.temperature_2m, max:c.temperature_2m, llovio:false};
+  existente.min=Math.min(existente.min, c.temperature_2m);
+  existente.max=Math.max(existente.max, c.temperature_2m);
+  if((c.precipitation||0)>0) existente.llovio=true;
+  historial[hoy]=existente;
+  const claves=Object.keys(historial).sort();
+  while(claves.length>400){ delete historial[claves.shift()]; } // no crece sin limite
+  localStorage.setItem('clima_diario_historial', JSON.stringify(historial));
+}
+function _statsMesActual(){
+  let historial; try{ historial=JSON.parse(localStorage.getItem('clima_diario_historial')||'{}'); }catch(e){ historial={}; }
+  const ahora=new Date();
+  const prefijo=ahora.getFullYear()+'-'+String(ahora.getMonth()+1).padStart(2,'0');
+  const dias=Object.keys(historial).filter(k=>k.startsWith(prefijo));
+  if(!dias.length) return null;
+  const diasLluvia=dias.filter(k=>historial[k].llovio).length;
+  let minima=null, maxima=null;
+  dias.forEach(k=>{
+    if(minima==null || historial[k].min<minima) minima=historial[k].min;
+    if(maxima==null || historial[k].max>maxima) maxima=historial[k].max;
+  });
+  return {totalDias:dias.length, diasLluvia, minima, maxima};
+}
 function _categoriaUV(uv){
   if(uv==null) return null;
   if(uv<3) return {nivel:'ok', texto:'Bajo'};
@@ -601,6 +675,8 @@ async function cargarClimaParaUbicacion(ubicacion){
     ULTIMA_ACTUALIZACION_MS=Date.now();
     localStorage.setItem('clima_ultima_ubicacion', JSON.stringify(ubicacion));
     localStorage.setItem('clima_cache', JSON.stringify({clima:CLIMA_ACTUAL, ts:Date.now()}));
+    aplicarTema(); // en modo 'auto', ahora que ya tenemos amanecer/atardecer real, se ajusta al instante
+    _registrarDiaClima();
     _obtenerCalidadAire(ubicacion.lat, ubicacion.lon).then(a=>{ CALIDAD_AIRE_ACTUAL=a; renderTodo(); }).catch(()=>{ CALIDAD_AIRE_ACTUAL=null; });
     _obtenerNowcast15(ubicacion.lat, ubicacion.lon).then(m15=>{ NOWCAST_ACTUAL=_analizarNowcast(m15); renderTodo(); _chequearNotificacionLluvia(); }).catch(()=>{ NOWCAST_ACTUAL=null; });
     _obtenerHistoricoMismaFecha(ubicacion.lat, ubicacion.lon).then(h=>{ HISTORICO_ACTUAL=h; renderTodo(); }).catch(()=>{ HISTORICO_ACTUAL=null; });
@@ -1375,11 +1451,40 @@ function renderNowcastBanner(){
   el.innerHTML='<div class="nowcast-banner'+(urgente?' urgente':'')+'"><div class="nowcast-icon">'+(NOWCAST_ACTUAL.tipo==='empieza'?'🌧️':'🌤️')+'</div>'+
     '<div><div class="nowcast-title">'+_fraseNowcast(NOWCAST_ACTUAL).replace(/\.$/,'')+'</div><div class="nowcast-sub">Pronóstico de alta resolución para tu ubicación exacta</div></div></div>';
 }
+function renderResumenDiasHome(){
+  const el=document.getElementById('home-dias-resumen');
+  if(!el || !CLIMA_ACTUAL || !CLIMA_ACTUAL.daily || !CLIMA_ACTUAL.daily.time) return;
+  const dias=CLIMA_ACTUAL.daily.time.slice(1,6).map((t,i)=>({t, max:CLIMA_ACTUAL.daily.temperature_2m_max[i+1], min:CLIMA_ACTUAL.daily.temperature_2m_min[i+1], code:CLIMA_ACTUAL.daily.weather_code[i+1]}));
+  el.innerHTML=dias.map(d=>
+    '<div class="pill" style="text-align:center;display:flex;flex-direction:column;gap:2px;padding:8px 12px">'+
+      '<div style="font-size:10px;color:var(--text3)">'+fmtDiaCompleto(d.t).split(' ')[0]+'</div>'+
+      '<div style="font-size:16px">'+_iconoClima(d.code)+'</div>'+
+      '<div style="font-weight:800;font-size:12px">'+Math.round(d.max)+'°/'+Math.round(d.min)+'°</div>'+
+    '</div>'
+  ).join('');
+}
+function renderLluviaSparkline(){
+  const el=document.getElementById('home-lluvia-mini');
+  if(!el || !CLIMA_ACTUAL || !CLIMA_ACTUAL.hourly || !CLIMA_ACTUAL.hourly.time) { if(el) el.style.display='none'; return; }
+  const horas=CLIMA_ACTUAL.hourly.time.map((t,i)=>({t, prob:CLIMA_ACTUAL.hourly.precipitation_probability[i]||0}))
+    .filter(h=>new Date(h.t).getTime()>=Date.now()-3600000).slice(0,12);
+  if(horas.length<4 || !horas.some(h=>h.prob>=10)){ el.style.display='none'; return; }
+  el.style.display='';
+  const barras=horas.map(h=>
+    '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">'+
+      '<div style="width:100%;height:38px;display:flex;align-items:flex-end"><div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:'+Math.max(4,h.prob)+'%;opacity:'+(h.prob>=10?0.9:0.25)+'"></div></div>'+
+      '<div style="font-size:8px;color:var(--text3)">'+fmtHora(h.t).slice(0,2)+'</div>'+
+    '</div>'
+  ).join('');
+  el.innerHTML='<div class="card"><div class="section-title" style="margin-bottom:8px">Probabilidad de lluvia · próximas horas</div><div style="display:flex;gap:4px;align-items:flex-end">'+barras+'</div></div>';
+}
 function renderHome(){
   if(!CLIMA_ACTUAL){ return; }
   document.getElementById('home-lugar').textContent=UBICACION_ACTIVA?UBICACION_ACTIVA.nombre:'—';
   aplicarEscena();
   renderNowcastBanner();
+  renderLluviaSparkline();
+  renderResumenDiasHome();
   const seg=calcularIndiceSeguridad(CLIMA_ACTUAL, CALIDAD_AIRE_ACTUAL);
   const badge=document.getElementById('home-safety-badge');
   badge.className='safety-badge '+seg.nivel;
@@ -1542,6 +1647,30 @@ function renderAlertas(){
   document.getElementById('alertas-safety-razones').innerHTML = seg.razones.length ? '• '+seg.razones.map(esc).join('<br>• ') : 'No hay factores de riesgo detectados ahora mismo.';
   const alertas=calcularAlertas(CLIMA_ACTUAL, CALIDAD_AIRE_ACTUAL);
   document.getElementById('alertas-lista').innerHTML=alertas.length ? alertas.map(alertaRowHtml).join('') : '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin alertas activas</div></div>';
+
+  const momentoEl=document.getElementById('alertas-mejor-momento');
+  if(momentoEl){
+    const m=_mejorMomentoSalir(CLIMA_ACTUAL);
+    if(m){
+      momentoEl.style.display='';
+      momentoEl.innerHTML='<div class="card" style="display:flex;align-items:center;gap:12px">'+
+        '<div class="row-icon" style="background:rgba(34,197,94,.15)">⏰</div>'+
+        '<div class="row-main"><div class="row-title">Mejor momento para salir hoy</div><div class="row-sub">Entre las '+fmtHora(m.inicio)+' y las '+fmtHora(m.fin)+'</div></div></div>';
+    } else { momentoEl.style.display='none'; momentoEl.innerHTML=''; }
+  }
+
+  const diarioEl=document.getElementById('alertas-diario');
+  if(diarioEl){
+    const stats=_statsMesActual();
+    if(stats){
+      diarioEl.style.display='';
+      diarioEl.innerHTML='<div class="section-title">📔 Tu diario del clima</div>'+
+        '<div class="card" style="display:flex;align-items:center;gap:12px">'+
+        '<div class="row-icon" style="background:rgba(232,163,61,.15)">📔</div>'+
+        '<div class="row-main"><div class="row-title">Este mes llovió '+stats.diasLluvia+' de '+stats.totalDias+' días registrados</div>'+
+        '<div class="row-sub">Mínima '+Math.round(stats.minima)+'° · Máxima '+Math.round(stats.maxima)+'° (desde que empezaste a usar la app)</div></div></div>';
+    } else { diarioEl.style.display='none'; diarioEl.innerHTML=''; }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
