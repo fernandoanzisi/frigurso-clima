@@ -733,17 +733,33 @@ async function actualizarClima(){
   toast('🔄 Actualizando...');
   await cargarClimaParaUbicacion(UBICACION_ACTIVA);
 }
+// si el GPS nunca responde (pasa de verdad en navegadores "adentro" de WhatsApp/Instagram/etc,
+// donde ni siquiera se dispara el error del navegador) la pantalla se quedaba pegada para
+// siempre con solo un toast de 2 segundos como unica pista. Vigia propio: a los 10s, pase lo
+// que pase, abrimos directo el buscador de lugares — nunca se queda sin salida.
+function _falloUbicacion(){
+  toast('⚠️ No se pudo obtener tu ubicación — buscá tu ciudad');
+  const lugarEl=document.getElementById('home-lugar');
+  if(lugarEl) lugarEl.textContent='Tocá 📍 arriba para buscar tu ciudad';
+  abrirModalLugar();
+}
 async function iniciarConGeolocalizacion(){
   const guardada=localStorage.getItem('clima_ultima_ubicacion');
   if(guardada){
     try{ await cargarClimaParaUbicacion(JSON.parse(guardada)); return; }catch(e){}
   }
-  if(!navigator.geolocation){ toast('⚠️ GPS no disponible, agregá un lugar manualmente'); return; }
+  let resuelto=false;
+  const vigia=setTimeout(()=>{ if(!resuelto){ resuelto=true; _falloUbicacion(); } }, 10000);
+  if(!navigator.geolocation){ clearTimeout(vigia); resuelto=true; _falloUbicacion(); return; }
   navigator.geolocation.getCurrentPosition(async pos=>{
+    if(resuelto) return; resuelto=true; clearTimeout(vigia);
     const {latitude:lat, longitude:lon}=pos.coords;
     const nombre=await _reverseGeocode(lat,lon);
     await cargarClimaParaUbicacion({nombre, lat, lon});
-  }, ()=>{ toast('⚠️ No se pudo obtener tu ubicación — agregá un lugar manualmente'); }, {enableHighAccuracy:true, timeout:12000});
+  }, ()=>{
+    if(resuelto) return; resuelto=true; clearTimeout(vigia);
+    _falloUbicacion();
+  }, {enableHighAccuracy:true, timeout:12000});
 }
 
 // ═══════════════════════════════════════════════════════════════
