@@ -1768,13 +1768,21 @@ function abrirModalLugar(){
   document.getElementById('lugar-resultados').innerHTML='';
   abrirModal('lugar');
 }
-async function usarUbicacionActual(){
+function usarUbicacionActual(){
   if(!navigator.geolocation){ toast('⚠️ GPS no disponible'); return; }
+  // mismo vigia que en el arranque de la app: si el GPS nunca responde (navegador integrado
+  // de WhatsApp/Instagram, etc.) no se queda esperando en silencio para siempre
+  let resuelto=false;
+  const vigia=setTimeout(()=>{ if(!resuelto){ resuelto=true; toast('⚠️ No se pudo obtener tu ubicación — probá buscarla por nombre'); } }, 10000);
   navigator.geolocation.getCurrentPosition(async pos=>{
+    if(resuelto) return; resuelto=true; clearTimeout(vigia);
     const {latitude:lat, longitude:lon}=pos.coords;
     const nombre=await _reverseGeocode(lat,lon);
     await _agregarLugar(nombre, lat, lon);
-  }, ()=>{ toast('⚠️ No se pudo obtener tu ubicación'); }, {enableHighAccuracy:true, timeout:12000});
+  }, ()=>{
+    if(resuelto) return; resuelto=true; clearTimeout(vigia);
+    toast('⚠️ No se pudo obtener tu ubicación — probá buscarla por nombre');
+  }, {enableHighAccuracy:true, timeout:12000});
 }
 async function buscarLugarPorNombre(){
   const q=(document.getElementById('lugar-buscar').value||'').trim();
@@ -2295,10 +2303,14 @@ function elegirSonidoDespertador(id){ _sonidoSel=id; renderSonidoPills(); }
 async function onArchivoSonidoElegido(e){
   const file=e.target.files[0];
   if(!file) return;
-  await abrirDB();
-  await dbPut('sonidos', {id:'actual', blob:file, nombre:file.name});
-  document.getElementById('desp-sonido-propio-nombre').textContent='✅ '+file.name;
-  toast('🎵 Sonido guardado');
+  try{
+    await abrirDB();
+    await dbPut('sonidos', {id:'actual', blob:file, nombre:file.name});
+    document.getElementById('desp-sonido-propio-nombre').textContent='✅ '+file.name;
+    toast('🎵 Sonido guardado');
+  }catch(e2){
+    toast('⚠️ No se pudo guardar el sonido en este dispositivo');
+  }
 }
 function abrirModalDespertador(){
   const config=JSON.parse(localStorage.getItem('clima_despertador')||'null')||{activo:false,nombre:'',hora:'07:00',voz:'',sonido:'acorde'};
