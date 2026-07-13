@@ -223,6 +223,7 @@
   <div class="header">
     <div style="flex:1"><div class="header-title">🌤️ Clima</div><div class="header-sub" id="home-lugar">Buscando el clima real de tu zona...</div></div>
     <button class="btn-icon" onclick="abrirModalConfig()">⚙️</button>
+    <button class="btn-icon" onclick="abrirModalDespertador()">⏰</button>
     <button class="btn-icon" onclick="abrirModalLugar()">📍</button>
     <button class="btn-icon" onclick="actualizarClima()">🔄</button>
   </div>
@@ -440,8 +441,8 @@ function aplicarAccesibilidad(){
   if(nivel==='grande') document.body.classList.add('a11y-grande');
   else if(nivel==='contraste'){ document.body.classList.add('a11y-contraste'); document.documentElement.setAttribute('data-contraste','alto'); }
 }
-// ── pantalla unica de Configuracion: tema + accesibilidad + acceso al despertador, en vez de
-// iconos sueltos en el header (antes habia 5, ahora quedan 3: config, lugar, refrescar) ──
+// ── pantalla unica de Configuracion: tema + accesibilidad (el atajo directo al despertador
+// volvio al header como icono ⏰ propio, ademas de seguir accesible desde aca) ──
 const TEMA_OPCIONES=[{id:'auto',nombre:'Automático'},{id:'light',nombre:'☀️ Claro'},{id:'dark',nombre:'🌙 Oscuro'}];
 function renderTemaPills(){
   const actual=localStorage.getItem('clima_tema')||'auto';
