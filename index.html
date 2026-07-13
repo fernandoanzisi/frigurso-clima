@@ -11,6 +11,7 @@
 <script>(function(){try{var t=localStorage.getItem('clima_tema')||'auto';var claro=t==='light'||(t==='auto'&&matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.setAttribute('data-theme',claro?'light':'dark');}catch(e){}})();</script>
 <style>
   :root{
+    color-scheme:dark;
     --bg:#0a1930;--bg2:#0e2340;--bg3:#163256;--card:#102743;
     --text:#eef4fb;--text2:#a9c1de;--text3:#5f7fa5;
     --accent:#3b9eff;--accent2:#38bdf8;--gold:#f5b83d;
@@ -21,6 +22,7 @@
     --sab:env(safe-area-inset-bottom,0px);
   }
   :root[data-theme="light"]{
+    color-scheme:light;
     --bg:#f2f6fb;--bg2:#ffffff;--bg3:#e9f0f9;--card:#ffffff;
     --text:#0c1d33;--text2:#3d5670;--text3:#7387a3;
     --border:#dbe5f0;
