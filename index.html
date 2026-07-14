@@ -202,6 +202,8 @@
   input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);border:2px solid var(--card);box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer}
   input[type="range"]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);border:2px solid var(--card);box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer;border:none}
   input[type="range"]::-moz-range-track{height:4px;border-radius:99px;background:var(--bg3)}
+  @keyframes polenFlota{0%{transform:translate(0,0);opacity:0}18%{opacity:.9}100%{transform:translate(15px,-11px);opacity:0}}
+  .polen-dot{animation:polenFlota 3.4s ease-in infinite}
 
   #ptr-indicator{position:fixed;top:8px;left:50%;transform:translate(-50%,-40px);opacity:0;z-index:150;width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:16px;transition:transform .25s,opacity .25s;pointer-events:none}
 </style>
@@ -271,6 +273,7 @@
   <div class="section" id="home-ropa" style="display:none"></div>
   <div class="section" id="home-lluvia-mini" style="display:none;margin-top:10px"></div>
   <div class="section" id="home-aire" style="display:none"></div>
+  <div class="section" id="home-polen" style="display:none"></div>
   <div class="section"><div class="section-title">Próximas horas</div><div class="pill-row" id="home-horas"></div></div>
   <div class="section" style="margin-top:14px"><div class="section-title">Próximos días</div><div class="pill-row" id="home-dias-resumen"></div></div>
   <div class="section" style="margin-top:14px"><div class="section-title">Alertas activas</div><div id="home-alertas"></div></div>
@@ -812,6 +815,79 @@ function _categoriaAQI(aqi){
   if(aqi<=200) return {nivel:'warn', texto:'Dañina'};
   if(aqi<=300) return {nivel:'bad', texto:'Muy dañina'};
   return {nivel:'bad', texto:'Peligrosa'};
+}
+// ═══════════════════════════════════════════════════════════════
+// POLEN (estimado): no existe ninguna estación real de polen cerca de esta zona
+// (Open-Meteo solo cubre Europa, Airmine solo cubre la region de Buenos Aires — Windy usa
+// esa misma fuente europea, tampoco tiene dato real acá). Se estima con el calendario de
+// floración típico de las especies mas comunes de la región (Alto Valle/Comahue) segun la
+// fecha del año, modulado con clima real (lluvia lava el polen, viento seco lo dispersa,
+// humedad alta lo pega al piso, frio intenso frena la floracion) — mismo criterio que Alertas.
+// ═══════════════════════════════════════════════════════════════
+const ESPECIES_POLEN=[
+  {clave:'cipres',    nombre:'Ciprés / coníferas', icono:'🌲', diaPico:227, semiAncho:45},
+  {clave:'alamo',     nombre:'Álamo / sauce',       icono:'🌳', diaPico:244, semiAncho:35},
+  {clave:'fresno',    nombre:'Fresno / plátano',    icono:'🍂', diaPico:274, semiAncho:30},
+  {clave:'gramineas', nombre:'Gramíneas / pastos',  icono:'🌾', diaPico:349, semiAncho:60},
+  {clave:'malezas',   nombre:'Malezas / yuyos',     icono:'🌿', diaPico:46,  semiAncho:45},
+];
+function _diaDelAnio(fecha){
+  const inicio=new Date(fecha.getFullYear(),0,0);
+  return Math.floor((fecha-inicio)/86400000);
+}
+function _intensidadEstacional(diaAnio, diaPico, semiAncho){
+  let d=Math.abs(diaAnio-diaPico);
+  d=Math.min(d, 365-d);
+  if(d>=semiAncho) return 0;
+  return 1-(d/semiAncho);
+}
+function _multiplicadorClimaPolen(clima){
+  if(!clima || !clima.current) return 1;
+  const c=clima.current;
+  let mult=1;
+  const precipHoy=(clima.daily && clima.daily.precipitation_sum) ? (clima.daily.precipitation_sum[0]||0) : 0;
+  if((c.precipitation||0)>0.5 || precipHoy>3) mult*=0.35;
+  else if(precipHoy>0.5) mult*=0.7;
+  if(c.relative_humidity_2m>85) mult*=0.6;
+  else if(c.relative_humidity_2m>70) mult*=0.85;
+  if((c.wind_speed_10m||0)>20 && (c.precipitation||0)<0.2) mult=Math.min(1.25, mult*1.25);
+  if(c.temperature_2m!=null && c.temperature_2m<4) mult*=0.5;
+  return mult;
+}
+function _nivelPolen(intensidad){
+  if(intensidad<=0.03) return {nivel:'nulo', texto:'Nulo', clase:'ok'};
+  if(intensidad<0.25) return {nivel:'bajo', texto:'Bajo', clase:'ok'};
+  if(intensidad<0.55) return {nivel:'moderado', texto:'Moderado', clase:'warn'};
+  if(intensidad<0.8) return {nivel:'alto', texto:'Alto', clase:'bad'};
+  return {nivel:'muyalto', texto:'Muy alto', clase:'bad'};
+}
+function calcularPolen(clima, fecha){
+  fecha=fecha||new Date();
+  const diaAnio=_diaDelAnio(fecha);
+  const mult=_multiplicadorClimaPolen(clima);
+  const especies=ESPECIES_POLEN.map(e=>{
+    const base=_intensidadEstacional(diaAnio, e.diaPico, e.semiAncho);
+    const intensidad=Math.max(0, Math.min(1, base*mult));
+    return Object.assign({}, e, {intensidad}, _nivelPolen(intensidad));
+  }).sort((a,b)=>b.intensidad-a.intensidad);
+  return {especies, dominante:especies[0]};
+}
+// ilustracion decorativa: rama sin hojas con amentos (asi florecen alamo/cipres, antes de la hoja)
+// soltando polen — color segun el nivel real calculado, no es una foto (no existe una API de
+// fotos del clima gratis, mismo criterio que la escena animada de Inicio)
+function _svgPolen(clase){
+  const col = clase==='bad' ? 'var(--red)' : clase==='warn' ? 'var(--gold)' : 'var(--green)';
+  return '<svg viewBox="0 0 64 64" width="46" height="46" style="flex-shrink:0">'+
+    '<path d="M32 60 L32 30 M32 38 L20 26 M32 34 L44 24 M32 44 L18 38 M32 42 L46 36" stroke="var(--text3)" stroke-width="2.5" fill="none" stroke-linecap="round"/>'+
+    '<ellipse cx="20" cy="26" rx="4" ry="7" fill="'+col+'" opacity=".85" transform="rotate(-25 20 26)"/>'+
+    '<ellipse cx="44" cy="24" rx="4" ry="7" fill="'+col+'" opacity=".85" transform="rotate(20 44 24)"/>'+
+    '<ellipse cx="18" cy="38" rx="3.5" ry="6" fill="'+col+'" opacity=".85" transform="rotate(-15 18 38)"/>'+
+    '<ellipse cx="46" cy="36" rx="3.5" ry="6" fill="'+col+'" opacity=".85" transform="rotate(15 46 36)"/>'+
+    '<circle class="polen-dot" cx="24" cy="20" r="1.6" fill="'+col+'"/>'+
+    '<circle class="polen-dot" cx="40" cy="18" r="1.3" fill="'+col+'" style="animation-delay:.6s"/>'+
+    '<circle class="polen-dot" cx="30" cy="28" r="1.4" fill="'+col+'" style="animation-delay:1.2s"/>'+
+    '<circle class="polen-dot" cx="48" cy="30" r="1.2" fill="'+col+'" style="animation-delay:1.8s"/>'+
+  '</svg>';
 }
 // busca la ventana horaria real (proximas 30h) donde la temperatura va a estar bajo cero,
 // para poder avisar "entre las X y las Y, minima estimada Z" en vez de solo "hay riesgo de helada"
@@ -1644,6 +1720,26 @@ function renderHome(){
         '<div class="row-amt"><div class="row-amt-val '+cat.nivel+'">●</div></div></div>';
     } else {
       aireEl.style.display='none';
+    }
+  }
+
+  const polenEl=document.getElementById('home-polen');
+  if(polenEl){
+    const polen=calcularPolen(CLIMA_ACTUAL);
+    const dom=polen.dominante;
+    if(!dom || dom.intensidad<=0.03){
+      polenEl.style.display='none';
+    } else {
+      polenEl.style.display='';
+      const otras=polen.especies.filter(e=>e.intensidad>0.1 && e.clave!==dom.clave).slice(0,2);
+      polenEl.innerHTML='<div class="card" style="display:flex;align-items:center;gap:12px">'+
+        _svgPolen(dom.clase)+
+        '<div class="row-main">'+
+          '<div class="row-title">Polen: '+esc(dom.texto)+' — '+esc(dom.nombre)+'</div>'+
+          (otras.length ? '<div class="row-sub">'+otras.map(e=>e.icono+' '+esc(e.nombre.split(' / ')[0])+' '+esc(e.texto).toLowerCase()).join(' · ')+'</div>' : '')+
+          '<div style="font-size:10px;color:var(--text3);margin-top:3px">Estimado según calendario de floración de la región y clima real — no hay estación de polen cerca de tu zona</div>'+
+        '</div>'+
+        '<div class="row-amt"><div class="row-amt-val '+dom.clase+'">●</div></div></div>';
     }
   }
 

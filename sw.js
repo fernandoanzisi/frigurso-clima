@@ -1,4 +1,4 @@
-const CACHE = 'clima-v26';
+const CACHE = 'clima-v27';
 const PRECACHE = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
