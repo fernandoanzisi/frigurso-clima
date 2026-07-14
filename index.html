@@ -218,6 +218,7 @@
   <button class="nav-btn" id="nav-alertas" onclick="navGo('alertas',this)"><span class="ni">⚠️</span><span>Alertas</span></button>
   <button class="nav-btn" id="nav-lugares" onclick="navGo('lugares',this)"><span class="ni">📍</span><span>Lugares</span></button>
   <button class="nav-btn" id="nav-radar" onclick="navGo('radar',this)"><span class="ni">🛰️</span><span>Radar</span></button>
+  <button class="nav-btn" id="nav-satelite" onclick="navGo('satelite',this)"><span class="ni">🌍</span><span>Satélite</span></button>
 </nav>
 
 <!-- HOME -->
@@ -329,6 +330,19 @@
       <div class="radar-hora" id="radar-hora">—</div>
     </div>
     <div class="card" style="font-size:11px;color:var(--text3);margin-top:10px">Radar de precipitación en tiempo real (RainViewer), con proyección a corto plazo ("próx."). Los colores muestran dónde está lloviendo/nevando ahora y hacia dónde se mueve.</div>
+  </div>
+</div>
+
+<!-- SATELITE -->
+<div class="page" id="page-satelite">
+  <div class="header"><div style="flex:1"><div class="header-title">🌍 Foto satelital real</div><div class="header-sub" id="satelite-lugar">—</div></div></div>
+  <div class="section">
+    <div id="satelite-map" class="radar-map"></div>
+    <div class="radar-controles">
+      <button class="btn-icon" onclick="_refrescarSatelite()">🔄</button>
+      <div class="row-sub" id="satelite-hora" style="flex:1;text-align:center">—</div>
+    </div>
+    <div class="card" style="font-size:11px;color:var(--text3);margin-top:10px">Imagen real del satélite geoestacionario GOES-East (NOAA/NASA), no un dibujo — de día en color real, de noche en infrarrojo. Se actualiza cada 10 min con ~40 min de demora real. El zoom es regional: se ve bien la Patagonia y el país, pero no el detalle de una cuadra.</div>
   </div>
 </div>
 
@@ -1528,7 +1542,7 @@ function aplicarEscena(){
 // ═══════════════════════════════════════════════════════════════
 let _pagActual='home';
 let _poppingState=false;
-const PAGE_RENDER_FN={ home:renderHome, pronostico:renderPronostico, alertas:renderAlertas, lugares:renderLugares, radar:renderRadar };
+const PAGE_RENDER_FN={ home:renderHome, pronostico:renderPronostico, alertas:renderAlertas, lugares:renderLugares, radar:renderRadar, satelite:renderSatelite };
 function navGo(page,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const target=document.getElementById('page-'+page);
@@ -2126,6 +2140,52 @@ function renderRadar(){
   const el=document.getElementById('radar-lugar');
   if(el) el.textContent = UBICACION_ACTIVA ? UBICACION_ACTIVA.nombre : '—';
   inicializarRadar();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SATELITE REAL (GOES-East ABI GeoColor via NASA GIBS — foto real del satelite
+// geoestacionario, no un dibujo. Gratis, sin API key, CORS abierto. Cubre todo
+// el continente cada 10 min con ~40 min de demora real; el zoom nativo es
+// regional (nivel 6), no da mas detalle que eso por mas que se acerque el mapa.
+// ═══════════════════════════════════════════════════════════════
+const _SATELITE_TILE_URL='https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png';
+let _sateliteMap=null, _sateliteTileLayer=null, _sateliteTimer=null;
+async function inicializarSatelite(){
+  const cont=document.getElementById('satelite-map');
+  if(!cont) return;
+  try{ await _cargarLeaflet(); }catch(e){ toast('⚠️ No se pudo cargar el mapa del satélite'); return; }
+  const lat=UBICACION_ACTIVA?UBICACION_ACTIVA.lat:-38.95, lon=UBICACION_ACTIVA?UBICACION_ACTIVA.lon:-68.06;
+  if(!_sateliteMap){
+    _sateliteMap=L.map('satelite-map', {zoomControl:true, attributionControl:true, maxZoom:7}).setView([lat,lon], 6);
+    const esOscuro=document.documentElement.getAttribute('data-theme')!=='light';
+    const estiloMapa=esOscuro?'dark_all':'light_all';
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/'+estiloMapa+'/{z}/{x}/{y}.png', {maxZoom:18, subdomains:'abcd', attribution:'© OpenStreetMap, © CARTO · Satélite: NOAA/NASA GIBS (GOES-East)'}).addTo(_sateliteMap);
+    L.marker([lat,lon]).addTo(_sateliteMap);
+  } else {
+    _sateliteMap.setView([lat,lon], _sateliteMap.getZoom()||6);
+    setTimeout(()=>_sateliteMap.invalidateSize(), 50);
+  }
+  _refrescarSatelite();
+  clearInterval(_sateliteTimer);
+  _sateliteTimer=setInterval(()=>{
+    if(_pagActual!=='satelite'){ clearInterval(_sateliteTimer); _sateliteTimer=null; return; }
+    _refrescarSatelite();
+  }, 10*60000);
+}
+function _refrescarSatelite(){
+  if(!_sateliteMap) return;
+  const nueva=L.tileLayer(_SATELITE_TILE_URL, {tileSize:256, maxNativeZoom:6, opacity:0.92, zIndex:5, attribution:'NOAA/NASA GIBS'});
+  nueva.addTo(_sateliteMap);
+  const anterior=_sateliteTileLayer;
+  _sateliteTileLayer=nueva;
+  if(anterior) setTimeout(()=>{ if(_sateliteMap) _sateliteMap.removeLayer(anterior); }, 300);
+  const horaEl=document.getElementById('satelite-hora');
+  if(horaEl) horaEl.textContent='Actualizado '+fmtHora(new Date());
+}
+function renderSatelite(){
+  const el=document.getElementById('satelite-lugar');
+  if(el) el.textContent = UBICACION_ACTIVA ? UBICACION_ACTIVA.nombre : '—';
+  inicializarSatelite();
 }
 
 // ═══════════════════════════════════════════════════════════════
