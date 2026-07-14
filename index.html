@@ -1561,6 +1561,31 @@ function renderTodo(){
 // ═══════════════════════════════════════════════════════════════
 // HOME
 // ═══════════════════════════════════════════════════════════════
+// ── generador de imagen real de la escena (html2canvas, se carga solo al compartir) ──
+let _html2canvasCargado=false, _html2canvasCargando=null;
+function _cargarHtml2Canvas(){
+  if(_html2canvasCargado) return Promise.resolve();
+  if(_html2canvasCargando) return _html2canvasCargando;
+  _html2canvasCargando=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    script.onload=()=>{ _html2canvasCargado=true; resolve(); };
+    script.onerror=()=>reject(new Error('No se pudo cargar el generador de imagen'));
+    document.head.appendChild(script);
+  });
+  return _html2canvasCargando;
+}
+async function _capturarImagenEscena(){
+  const wrap=document.getElementById('escena-wrap');
+  if(!wrap || typeof html2canvas==='undefined') return null;
+  const canvas=await html2canvas(wrap, {
+    backgroundColor:null,
+    scale:2,
+    useCORS:true,
+    ignoreElements:el=>el.classList && (el.classList.contains('escena-btn-compartir') || el.classList.contains('escena-btn-sonido'))
+  });
+  return new Promise(resolve=>canvas.toBlob(blob=>resolve(blob), 'image/png'));
+}
 async function compartirClima(){
   if(!CLIMA_ACTUAL || !UBICACION_ACTIVA){ toast('Esperá a que cargue el clima'); return; }
   const c=CLIMA_ACTUAL.current;
@@ -1584,7 +1609,16 @@ async function compartirClima(){
   if(alertas.length) texto+='\n⚠️ '+alertas[0].texto;
   texto+='\n\nVisto en Frigurso Clima · '+fmtHora(new Date())+'hs';
 
+  let archivo=null;
+  try{
+    toast('📤 Generando imagen...');
+    await _cargarHtml2Canvas();
+    const blob=await _capturarImagenEscena();
+    if(blob) archivo=new File([blob], 'clima.png', {type:'image/png'});
+  }catch(e){ /* si falla la imagen, se comparte igual el texto con el link */ }
+
   const datos={text:texto, title:'Frigurso Clima', url:urlApp};
+  if(archivo && navigator.canShare && navigator.canShare({files:[archivo]})) datos.files=[archivo];
 
   if(navigator.share){
     try{ await navigator.share(datos); }catch(e){}
