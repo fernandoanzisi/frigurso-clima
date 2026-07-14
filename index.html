@@ -354,7 +354,8 @@
     <div class="field-wrap"><div class="field-label">Tu nombre</div><input class="input" id="desp-nombre" placeholder="Ej: Fernando"></div>
     <div class="field-wrap"><div class="field-label">Frase para despertarte</div><input class="input" id="desp-frase" placeholder="Es hora de levantarse"></div>
     <div class="field-wrap"><div class="field-label">Hora aproximada</div><input type="time" class="input" id="desp-hora"></div>
-    <button class="btn-secondary" onclick="abrirAlarmaNativa()">⏰ Abrir también en el reloj del celular</button>
+    <button class="btn-secondary" id="btn-alarma-nativa" onclick="abrirAlarmaNativa()">⏰ Abrir también en el reloj del celular</button>
+    <div class="card" id="alarma-nativa-ios-msg" style="display:none;font-size:11px;color:var(--text3);margin-bottom:14px">🍎 En iPhone, Apple no deja que ninguna web abra la app Reloj automáticamente. Abrí la app Reloj de tu iPhone y agregá la alarma vos, a la misma hora.</div>
     <div class="field-wrap"><div class="field-label">Días</div><div class="pill-row" id="desp-dias-pills"></div></div>
     <div class="field-wrap"><div class="field-label">Repetir el aviso (por si no lo escuchás)</div><div class="pill-row" id="desp-repetir-pills"></div></div>
     <div class="field-wrap"><div class="field-label">Voz</div>
@@ -2426,10 +2427,20 @@ function verificarSaludoDespertador(){
   const minutosActual=ahora.getHours()*60+ahora.getMinutes();
   if(minutosActual>=minutosConfig && minutosActual<=minutosConfig+90) ejecutarSaludoDespertador();
 }
+// iOS (iPhone/iPad) no tiene ningun equivalente al intent de Android de abajo — Apple no deja
+// que una pagina web abra la app Reloj bajo ningun concepto, no hay workaround posible. Se usa
+// para ocultar el boton en iOS (ver abrirModalDespertador) en vez de mostrar un boton que jamas
+// va a funcionar. iPadOS 13+ reporta user-agent de Mac, por eso el chequeo de maxTouchPoints.
+function _esIOS(){
+  const ua=navigator.userAgent||'';
+  return /iPhone|iPad|iPod/.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+}
 // alarma NATIVA del telefono con el mismo horario configurado (ademas del saludo con voz, no
 // en vez de) — usa un intent de Android para abrir directo la pantalla de "nueva alarma" del
 // reloj del sistema. Depende del modelo/app de reloj del celular, no es 100% garantizado en
-// todos los Android, pero si no funciona simplemente no pasa nada (fallback a la propia app).
+// todos los Android (Reloj de fabrica sin soporte para SET_ALARM, o el navegador in-app de
+// WhatsApp/Instagram que bloquea el intent) — si no funciona, se avisa con un toast en vez de
+// quedar en silencio como antes (parecia que el boton estaba roto).
 function abrirAlarmaNativa(){
   const horaVal=document.getElementById('desp-hora').value||'07:00';
   const partes=horaVal.split(':').map(Number);
@@ -2437,6 +2448,11 @@ function abrirAlarmaNativa(){
   const fallback=encodeURIComponent(location.href);
   const uri='intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.alarm.HOUR='+h+';i.android.intent.extra.alarm.MINUTES='+m+';S.android.intent.extra.alarm.MESSAGE='+encodeURIComponent('Frigurso Clima')+';S.browser_fallback_url='+fallback+';end';
   window.location.href=uri;
+  setTimeout(()=>{
+    if(document.visibilityState==='visible'){
+      toast('No se pudo abrir el Reloj automáticamente — abrilo vos y creá la alarma a las '+horaVal);
+    }
+  }, 1200);
 }
 // confirmacion visual del saludo: aparece siempre, hable o no hable la voz (por si el celular
 // bloquea el audio sin avisar) — con boton para cortar el saludo si es mal momento
@@ -2536,6 +2552,9 @@ function abrirModalDespertador(){
   renderRepetirPills();
   _diasSel=config.soloSemana?'semana':'todos';
   renderDiasPills();
+  const esIOS=_esIOS();
+  document.getElementById('btn-alarma-nativa').style.display=esIOS?'none':'';
+  document.getElementById('alarma-nativa-ios-msg').style.display=esIOS?'':'none';
   abrirModal('despertador');
 }
 function toggleDespertadorActivo(){
