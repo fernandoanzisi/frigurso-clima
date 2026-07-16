@@ -2851,8 +2851,12 @@ async function _hashPass(pass){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-function fgOcultarLock(){ document.getElementById('fg-lock').style.display = 'none'; }
+function fgOcultarLock(){
+  document.getElementById('fg-lock').style.display = 'none';
+  try{ sessionStorage.setItem('clima_unlocked','1'); }catch(e){}
+}
 function fgMostrarLock(){
+  try{ sessionStorage.removeItem('clima_unlocked'); }catch(e){}
   document.getElementById('lk-pass-in').value = '';
   fgHideErr('lk-ing-err');
   document.getElementById('fg-lock').style.display = 'flex';
@@ -2883,6 +2887,9 @@ function fgOlvideAcceso(){
 if(localStorage.getItem('clima_pass_hash')){
   document.getElementById('lk-crear').style.display = 'none';
   document.getElementById('lk-ingresar').style.display = 'block';
+  let yaDesbloqueado = false;
+  try{ yaDesbloqueado = sessionStorage.getItem('clima_unlocked') === '1'; }catch(e){}
+  if(yaDesbloqueado) fgOcultarLock();
 }
 </script>
 </body>
