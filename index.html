@@ -623,7 +623,7 @@ let LUGARES=[];
 
 async function _obtenerClima(lat, lon){
   const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+
-    '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,uv_index'+
+    '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,uv_index,visibility'+
     '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,visibility,uv_index,surface_pressure'+
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,sunrise,sunset,uv_index_max'+
     '&timezone=auto&forecast_days=16&past_hours=6';
@@ -718,6 +718,20 @@ function _categoriaUV(uv){
   if(uv<8) return {nivel:'warn', texto:'Alto'};
   if(uv<11) return {nivel:'warn', texto:'Muy alto'};
   return {nivel:'bad', texto:'Extremo'};
+}
+// visibilidad real en metros (dato de la API, no solo el código de "niebla") —
+// umbrales estándar de meteorología/aviación adaptados a uso vial cotidiano
+function _categoriaVisibilidad(metros){
+  if(metros==null) return null;
+  if(metros<200) return {nivel:'bad', texto:'Niebla muy densa'};
+  if(metros<1000) return {nivel:'bad', texto:'Niebla densa'};
+  if(metros<4000) return {nivel:'warn', texto:'Reducida'};
+  if(metros<10000) return {nivel:'ok', texto:'Algo reducida'};
+  return {nivel:'ok', texto:'Buena'};
+}
+function _fmtVisibilidad(metros){
+  if(metros==null) return '—';
+  return metros<1000 ? Math.round(metros)+' m' : (metros/1000).toFixed(metros<10000?1:0)+' km';
 }
 // fase lunar en palabras, para acompañar el dibujo de la luna en la escena
 function _nombreFaseLunar(fase){
@@ -1019,8 +1033,19 @@ function calcularAlertas(clima, aire){
   else if(c.temperature_2m>=30) alertas.push({tipo:'calor', nivel:'warn', texto:'Día caluroso ('+c.temperature_2m+'°)'});
   const categoria=_categoriaClima(c.weather_code);
   if(categoria==='tormenta') alertas.push({tipo:'tormenta', nivel:'bad', texto:'Tormenta eléctrica — evitá refugiarte bajo árboles'});
-  if(categoria==='niebla') alertas.push({tipo:'niebla', nivel:'warn', texto:'Niebla — visibilidad reducida, manejá con luces bajas'});
-  if(c.precipitation>=8) alertas.push({tipo:'lluvia', nivel:'bad', texto:'Lluvia intensa — las calles pueden anegarse'});
+  // Visibilidad: se prioriza el dato real en metros (agarra niebla, bruma, humo, lo que sea
+  // que esté reduciendo la visibilidad ahora mismo), y si por algún motivo no vino ese dato
+  // se cae al código de clima (45/48 = niebla) como respaldo.
+  const catVis=_categoriaVisibilidad(c.visibility);
+  if(catVis && catVis.nivel==='bad'){
+    alertas.push({tipo:'visibilidad', nivel:'bad', texto:catVis.texto+' ('+_fmtVisibilidad(c.visibility)+') — evitá manejar si no es necesario, y si tenés que hacerlo usá luces bajas y bajá la velocidad'});
+  } else if(catVis && catVis.nivel==='warn'){
+    alertas.push({tipo:'visibilidad', nivel:'warn', texto:'Visibilidad reducida ('+_fmtVisibilidad(c.visibility)+') — manejá con luces bajas'});
+  } else if(!catVis && categoria==='niebla'){
+    alertas.push({tipo:'visibilidad', nivel:'warn', texto:'Niebla — visibilidad reducida, manejá con luces bajas'});
+  }
+  if(c.precipitation>=8) alertas.push({tipo:'lluvia', nivel:'bad', texto:'Lluvia intensa — las calles pueden anegarse, y también reduce la visibilidad al manejar'});
+  if(categoria==='nieve') alertas.push({tipo:'nieve', nivel: c.precipitation>=3?'bad':'warn', texto:'Nevada — calzada resbaladiza y visibilidad reducida, manejá con precaución'});
   const catUV=_categoriaUV(c.uv_index);
   if(catUV && catUV.nivel==='bad') alertas.push({tipo:'uv', nivel:'bad', texto:'Sol extremo (UV '+Math.round(c.uv_index)+') — evitá el sol del mediodía, usá protección alta'});
   else if(catUV && catUV.nivel==='warn' && c.uv_index>=8) alertas.push({tipo:'uv', nivel:'warn', texto:'Sol muy fuerte (UV '+Math.round(c.uv_index)+') — protector solar, sombrero y anteojos'});
@@ -1780,6 +1805,8 @@ function renderHome(){
 
   const c=CLIMA_ACTUAL.current;
   const catUV=_categoriaUV(c.uv_index);
+  const catVisHome=_categoriaVisibilidad(c.visibility);
+  const colorVis = catVisHome && catVisHome.nivel==='bad' ? 'color:var(--red)' : catVisHome && catVisHome.nivel==='warn' ? 'color:var(--gold)' : '';
   const presion=_tendenciaPresion(CLIMA_ACTUAL);
   const flechaPresion = presion ? {subiendo:'↑',bajando:'↓',estable:'→'}[presion.tendencia] : '';
   const sunrise=CLIMA_ACTUAL.daily&&CLIMA_ACTUAL.daily.sunrise?CLIMA_ACTUAL.daily.sunrise[0]:null;
@@ -1789,6 +1816,7 @@ function renderHome(){
     '<div class="kpi-box"><div class="kpi-val">'+c.relative_humidity_2m+'%</div><div class="kpi-lbl">Humedad</div></div>'+
     '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_speed_10m)+' km/h <span style="display:inline-block;transform:rotate('+((c.wind_direction_10m||0)+180)+'deg)">↑</span></div><div class="kpi-lbl">Viento '+_direccionCardinal(c.wind_direction_10m)+'</div></div>'+
     '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.wind_gusts_10m||0)+' km/h</div><div class="kpi-lbl">Ráfagas</div></div>'+
+    (catVisHome ? '<div class="kpi-box"><div class="kpi-val" style="'+colorVis+'">'+_fmtVisibilidad(c.visibility)+'</div><div class="kpi-lbl">👁️ Visibilidad'+(catVisHome.nivel!=='ok'?' — '+catVisHome.texto:'')+'</div></div>' : '')+
     (catUV ? '<div class="kpi-box"><div class="kpi-val">'+Math.round(c.uv_index)+'</div><div class="kpi-lbl">UV '+catUV.texto+'</div></div>' : '')+
     (presion ? '<div class="kpi-box"><div class="kpi-val">'+Math.round(presion.actual)+' '+flechaPresion+'</div><div class="kpi-lbl">Presión '+presion.tendencia+'</div></div>' : '')+
     (sunrise ? '<div class="kpi-box"><div class="kpi-val">'+fmtHora(sunrise)+'</div><div class="kpi-lbl">🌅 Amanece</div></div>' : '')+
