@@ -95,6 +95,8 @@
   /* ═══════ ESCENA ANIMADA DE CLIMA — fondo fijo de toda la pantalla de Inicio ═══════ */
   .escena-wrap{position:fixed;inset:0;overflow:hidden;z-index:0}
   .home-fg{position:relative;z-index:1}
+  #page-home .home-fg{pointer-events:none}
+  #page-home .home-fg button{pointer-events:auto}
   #page-home .header{background:rgba(6,16,32,.4);backdrop-filter:blur(6px);border-bottom-color:rgba(255,255,255,.08)}
   #page-home .card,#page-home .kpi-box{background:color-mix(in srgb, var(--card) 78%, transparent);backdrop-filter:blur(10px)}
   #page-home .pill{background:color-mix(in srgb, var(--bg3) 72%, transparent);backdrop-filter:blur(8px)}
