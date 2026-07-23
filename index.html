@@ -92,8 +92,12 @@
   .empty-sub{font-size:12px;color:var(--text3)}
   .chart-canvas-wrap{background:var(--bg3);border-radius:14px;padding:8px;margin-bottom:10px}
 
-  /* ═══════ ESCENA ANIMADA DE CLIMA ═══════ */
-  .escena-wrap{position:relative;width:100%;aspect-ratio:16/11;border-radius:18px;overflow:hidden;margin:14px 0;box-shadow:var(--shadow)}
+  /* ═══════ ESCENA ANIMADA DE CLIMA — fondo fijo de toda la pantalla de Inicio ═══════ */
+  .escena-wrap{position:fixed;inset:0;overflow:hidden;z-index:0}
+  .home-fg{position:relative;z-index:1}
+  #page-home .header{background:rgba(6,16,32,.4);backdrop-filter:blur(6px);border-bottom-color:rgba(255,255,255,.08)}
+  #page-home .card,#page-home .kpi-box{background:color-mix(in srgb, var(--card) 78%, transparent);backdrop-filter:blur(10px)}
+  #page-home .pill{background:color-mix(in srgb, var(--bg3) 72%, transparent);backdrop-filter:blur(8px)}
   .escena-cielo{position:absolute;inset:0;transition:background 1.2s ease}
   .escena-cielo.dia{background:linear-gradient(180deg,#3b9eff 0%,#8ecdfb 55%,#bfe4ff 100%)}
   .escena-cielo.atardecer{background:linear-gradient(180deg,#2b3a67 0%,#e08a4f 55%,#f6c66b 100%)}
@@ -128,6 +132,21 @@
   .escena-arbol-copa span:nth-child(3){width:70%;height:70%;left:16%;top:0}
   @keyframes balanceo{0%,100%{transform:rotate(calc(-1deg * var(--amp-viento,2)))}50%{transform:rotate(calc(1deg * var(--amp-viento,2)))}}
 
+  .escena-persona{position:absolute;bottom:16%;left:42%;width:24px;filter:drop-shadow(1px 3px 2px rgba(0,0,0,.3))}
+  .escena-persona-cabeza{width:12px;height:12px;border-radius:50%;background:#e8b98a;margin:0 auto;position:relative}
+  .escena-persona-lentes{display:none;position:absolute;top:5px;left:1px;width:10px;height:3px;background:#111;border-radius:2px;opacity:.85}
+  .escena-persona-cuerpo{width:18px;height:22px;background:#3b5c8a;border-radius:8px 8px 3px 3px;margin:1px auto 0}
+  .escena-persona-bufanda{display:none;width:20px;height:5px;background:#c23b3b;border-radius:3px;margin:-2px auto 0}
+  .escena-persona-gorro{display:none;width:13px;height:7px;background:#c23b3b;border-radius:8px 8px 0 0;margin:0 auto -2px}
+  .escena-persona-piernas{display:flex;justify-content:center;gap:4px}
+  .escena-persona-pierna{width:6px;height:9px;background:#22314a;border-radius:0 0 3px 3px}
+  .escena-persona-paraguas{display:none;position:absolute;top:-16px;left:50%;transform:translateX(-50%);width:52px;text-align:center}
+  .escena-persona-paraguas-copa{width:100%;height:16px;background:radial-gradient(circle at 50% 100%,#d7263d,#a3182c 85%);border-radius:50% 50% 0 0}
+  .escena-persona-paraguas-mango{width:2px;height:34px;background:#5c3a26;margin:0 auto}
+  .escena-persona.lluvia .escena-persona-paraguas{display:block}
+  .escena-persona.frio .escena-persona-gorro,.escena-persona.frio .escena-persona-bufanda{display:block}
+  .escena-persona.sol .escena-persona-lentes{display:block}
+
   .escena-niebla{position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(220,230,240,.55) 60%,rgba(220,230,240,.75));pointer-events:none}
   .escena-relampago{position:absolute;inset:0;background:radial-gradient(circle,#fff 0%,#eaf2ff 70%,#d8e8ff 100%);opacity:0;pointer-events:none}
   .escena-cargando{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:linear-gradient(180deg,#3b9eff 0%,#8ecdfb 55%,#bfe4ff 100%);z-index:6;transition:opacity .35s;color:#04152b}
@@ -156,10 +175,10 @@
   @keyframes viento-fuerte{0%,100%{transform:translate(0,0) rotate(0deg)}25%{transform:translate(-1.5px,.6px) rotate(-.15deg)}50%{transform:translate(1.5px,-.6px) rotate(.12deg)}75%{transform:translate(-.8px,.6px) rotate(-.1deg)}}
   .escena-wrap.ventoso{animation:viento-fuerte .5s ease-in-out infinite}
 
-  .escena-overlay-info{position:absolute;left:10px;bottom:10px;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);border-radius:12px;padding:8px 12px;color:#fff}
-  .escena-btn-compartir{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center}
+  .escena-overlay-info{position:absolute;left:14px;bottom:calc(70px + var(--sab) + 10px);background:rgba(6,16,32,.55);backdrop-filter:blur(4px);border-radius:12px;padding:8px 12px;color:#fff}
+  .escena-btn-compartir{position:absolute;top:calc(env(safe-area-inset-top,0px) + 72px);right:14px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center}
   .escena-btn-compartir:active{background:rgba(6,16,32,.8)}
-  .escena-btn-sonido{position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;opacity:.65}
+  .escena-btn-sonido{position:absolute;top:calc(env(safe-area-inset-top,0px) + 72px);left:14px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;opacity:.65}
   .escena-btn-sonido.activo{opacity:1;background:rgba(59,158,255,.75)}
   .escena-btn-sonido:active{background:rgba(6,16,32,.8)}
   .escena-temp{font-size:26px;font-weight:900;font-family:var(--mono);line-height:1}
@@ -208,9 +227,7 @@
   #ptr-indicator{position:fixed;top:8px;left:50%;transform:translate(-50%,-40px);opacity:0;z-index:150;width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:16px;transition:transform .25s,opacity .25s;pointer-events:none}
 
 /* ═══════════════════════════════════════════════════════════════
-   IDENTIDAD FRIGURSO — splash (puro CSS, se va solo) + traba de
-   privacidad simple (contraseña, no cifra datos). Bloque agregado
-   por fuera de la app existente, no toca nada de la lógica de abajo.
+   IDENTIDAD FRIGURSO — splash de marca (puro CSS, se va solo).
    ═══════════════════════════════════════════════════════════════ */
 #fg-splash{
   position:fixed;inset:0;z-index:9000;background:#0b1220;
@@ -238,20 +255,6 @@
   text-transform:uppercase;color:#9fb0cc;margin-top:8px;
   opacity:0;animation:fg-word-in .5s ease 1.05s both;
 }
-#fg-lock{position:fixed;inset:0;z-index:8000;background:#0b1220;display:flex;align-items:center;justify-content:center;padding:24px;}
-.fg-lock-card{width:100%;max-width:380px;}
-.fg-lock-brand{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:30px;font-weight:800;font-stretch:condensed;font-size:15px;letter-spacing:.04em;color:#9fb0cc;text-transform:uppercase;}
-.fg-lock-brand .dot{width:9px;height:9px;border-radius:2px;background:#d7263d;transform:rotate(45deg);flex-shrink:0;}
-.fg-lock-title{font-size:14px;font-weight:700;margin-bottom:4px;color:#e8edf7;}
-.fg-lock-sub{font-size:12px;color:#63739a;margin-bottom:16px;}
-.fg-card{background:#111a2e;border:1px solid #1e2b47;border-radius:12px;padding:20px;}
-.fg-card label{display:block;font-size:12px;color:#9fb0cc;margin-bottom:6px;}
-.fg-card input{width:100%;background:#0e1626;border:1px solid #1e2b47;border-radius:9px;padding:11px 12px;color:#e8edf7;font-size:14px;box-sizing:border-box;}
-.fg-card .field{margin-bottom:14px;}
-.fg-card .btn-block{width:100%;border:none;border-radius:12px;padding:12px 18px;font-weight:700;font-size:13px;background:linear-gradient(135deg,#2dd4bf,#3b82f6);color:#06131f;cursor:pointer;}
-.fg-err{color:#ef4444;font-size:12px;margin:-4px 0 10px;display:none;}
-.fg-switch{text-align:center;margin-top:16px;font-size:12px;color:#63739a;}
-.fg-switch a{color:#2dd4bf;cursor:pointer;text-decoration:underline;}
 @media (prefers-reduced-motion: reduce){
   .fg-sash{animation:none;transform:rotate(-22deg) translateX(0);}
   .fg-wordmark,.fg-tagline{animation:none;opacity:1;transform:none;}
@@ -267,29 +270,6 @@
   <div class="fg-tagline">Clima</div>
 </div>
 
-<div id="fg-lock">
-  <div class="fg-lock-card">
-    <div class="fg-lock-brand"><div class="dot"></div><span>Frigurso</span></div>
-
-    <div id="lk-crear" class="fg-card" style="display:block;">
-      <div class="fg-lock-title">Creá tu acceso</div>
-      <div class="fg-lock-sub">Es solo para que nadie más abra la app desde este celular. No cifra los datos.</div>
-      <div class="field"><label>Contraseña (mínimo 4 caracteres)</label><input type="password" id="lk-pass" placeholder="••••••••"></div>
-      <div class="field"><label>Repetir contraseña</label><input type="password" id="lk-pass2" placeholder="••••••••"></div>
-      <div class="fg-err" id="lk-crear-err"></div>
-      <button class="btn-block" onclick="fgCrearAcceso()">Crear y entrar</button>
-    </div>
-
-    <div id="lk-ingresar" class="fg-card" style="display:none;">
-      <div class="fg-lock-title">Ingresá tu contraseña</div>
-      <div class="field"><input type="password" id="lk-pass-in" placeholder="Contraseña" onkeydown="if(event.key==='Enter')fgIngresarAcceso()"></div>
-      <div class="fg-err" id="lk-ing-err"></div>
-      <button class="btn-block" onclick="fgIngresarAcceso()">Ingresar</button>
-      <div class="fg-switch"><a onclick="fgOlvideAcceso()">Olvidé mi contraseña</a></div>
-    </div>
-  </div>
-</div>
-
 <div id="ptr-indicator">⬇️</div>
 
 <nav class="nav-bottom" id="navbar">
@@ -303,62 +283,69 @@
 
 <!-- HOME -->
 <div class="page active" id="page-home">
-  <div class="header">
-    <div style="flex:1"><div class="header-title">🌤️ Clima</div><div class="header-sub" id="home-lugar">Buscando el clima real de tu zona...</div></div>
-    <button class="btn-icon" onclick="fgMostrarLock()" title="Bloquear">🔒</button>
-    <button class="btn-icon" onclick="abrirModalConfig()">⚙️</button>
-    <button class="btn-icon" onclick="abrirModalDespertador()">⏰</button>
-    <button class="btn-icon" onclick="abrirModalLugar()">📍</button>
-    <button class="btn-icon" onclick="actualizarClima()">🔄</button>
-  </div>
-  <div class="section">
-    <div class="escena-wrap" id="escena-wrap">
-      <div class="escena-cielo dia" id="escena-cielo">
-        <div id="escena-estrellas"></div>
-        <canvas id="escena-canvas-fondo" class="escena-canvas"></canvas>
-        <div class="escena-suelo" id="escena-suelo">
-          <div class="escena-arbol" style="left:52%;width:18%;--dur-viento:4s;--amp-viento:2">
-            <div class="escena-arbol-copa"><span></span><span></span><span></span></div><div class="escena-arbol-tronco"></div>
-          </div>
-          <div class="escena-arbol" style="left:74%;width:13%;--dur-viento:3.6s;--amp-viento:2.4">
-            <div class="escena-arbol-copa"><span></span><span></span><span></span></div><div class="escena-arbol-tronco"></div>
-          </div>
+  <div class="escena-wrap" id="escena-wrap">
+    <div class="escena-cielo dia" id="escena-cielo">
+      <div id="escena-estrellas"></div>
+      <canvas id="escena-canvas-fondo" class="escena-canvas"></canvas>
+      <div class="escena-suelo" id="escena-suelo">
+        <div class="escena-arbol" style="left:52%;width:18%;--dur-viento:4s;--amp-viento:2">
+          <div class="escena-arbol-copa"><span></span><span></span><span></span></div><div class="escena-arbol-tronco"></div>
         </div>
-        <div class="escena-casa">
-          <div class="escena-chimenea"><div class="escena-humo" id="escena-humo"></div></div>
-          <div class="escena-casa-techo"></div>
-          <div class="escena-casa-cuerpo"><div class="escena-casa-ventana"></div><div class="escena-casa-puerta"></div></div>
+        <div class="escena-arbol" style="left:74%;width:13%;--dur-viento:3.6s;--amp-viento:2.4">
+          <div class="escena-arbol-copa"><span></span><span></span><span></span></div><div class="escena-arbol-tronco"></div>
         </div>
-        <canvas id="escena-canvas-frente" class="escena-canvas"></canvas>
-        <div class="escena-niebla" id="escena-niebla" style="display:none"></div>
-        <div class="escena-relampago" id="escena-relampago"></div>
-        <div class="escena-cargando" id="escena-cargando"><div class="spinner"></div><div class="escena-cargando-txt">Buscando el clima real...</div></div>
       </div>
-      <div class="escena-overlay-info">
-        <div class="escena-temp" id="escena-temp">—°</div>
-        <div class="escena-desc" id="escena-desc">Cargando</div>
+      <div class="escena-casa">
+        <div class="escena-chimenea"><div class="escena-humo" id="escena-humo"></div></div>
+        <div class="escena-casa-techo"></div>
+        <div class="escena-casa-cuerpo"><div class="escena-casa-ventana"></div><div class="escena-casa-puerta"></div></div>
       </div>
-      <button class="escena-btn-compartir" onclick="compartirClima()">📤</button>
-      <button class="escena-btn-sonido" id="btn-sonido-ambiente" onclick="toggleSonidoAmbiente()">🔊</button>
+      <div class="escena-persona" id="escena-persona">
+        <div class="escena-persona-paraguas"><div class="escena-persona-paraguas-copa"></div><div class="escena-persona-paraguas-mango"></div></div>
+        <div class="escena-persona-gorro"></div>
+        <div class="escena-persona-cabeza"><div class="escena-persona-lentes"></div></div>
+        <div class="escena-persona-bufanda"></div>
+        <div class="escena-persona-cuerpo"></div>
+        <div class="escena-persona-piernas"><div class="escena-persona-pierna"></div><div class="escena-persona-pierna"></div></div>
+      </div>
+      <canvas id="escena-canvas-frente" class="escena-canvas"></canvas>
+      <div class="escena-niebla" id="escena-niebla" style="display:none"></div>
+      <div class="escena-relampago" id="escena-relampago"></div>
+      <div class="escena-cargando" id="escena-cargando"><div class="spinner"></div><div class="escena-cargando-txt">Buscando el clima real...</div></div>
     </div>
+    <div class="escena-overlay-info">
+      <div class="escena-temp" id="escena-temp">—°</div>
+      <div class="escena-desc" id="escena-desc">Cargando</div>
+    </div>
+    <button class="escena-btn-compartir" onclick="compartirClima()">📤</button>
+    <button class="escena-btn-sonido" id="btn-sonido-ambiente" onclick="toggleSonidoAmbiente()">🔊</button>
   </div>
-  <div class="section" style="text-align:center;margin-top:-6px" id="home-actualizado"></div>
-  <div class="section" id="home-saludo-visual" style="display:none"></div>
-  <div class="section" id="home-nowcast" style="display:none"></div>
-  <div class="section" style="text-align:center">
-    <span class="safety-badge ok" id="home-safety-badge">Cargando...</span>
+  <div class="home-fg">
+    <div class="header">
+      <div style="flex:1"><div class="header-title">🌤️ Clima</div><div class="header-sub" id="home-lugar">Buscando el clima real de tu zona...</div></div>
+      <button class="btn-icon" onclick="abrirModalConfig()">⚙️</button>
+      <button class="btn-icon" onclick="abrirModalDespertador()">⏰</button>
+      <button class="btn-icon" onclick="abrirModalLugar()">📍</button>
+      <button class="btn-icon" onclick="actualizarClima()">🔄</button>
+    </div>
+    <div class="section" style="text-align:center;margin-top:-6px" id="home-actualizado"></div>
+    <div class="section" id="home-saludo-visual" style="display:none"></div>
+    <div class="section" id="home-nowcast" style="display:none"></div>
+    <div class="section" style="text-align:center">
+      <span class="safety-badge ok" id="home-safety-badge">Cargando...</span>
+    </div>
+    <div class="kpi-grid" id="home-kpis">
+      <div class="kpi-box skeleton-box"></div><div class="kpi-box skeleton-box"></div>
+      <div class="kpi-box skeleton-box"></div><div class="kpi-box skeleton-box"></div>
+    </div>
+    <div class="section" id="home-ropa" style="display:none"></div>
+    <div class="section" id="home-lluvia-mini" style="display:none;margin-top:10px"></div>
+    <div class="section" id="home-aire" style="display:none"></div>
+    <div class="section" id="home-polen" style="display:none"></div>
+    <div class="section"><div class="section-title">Próximas horas</div><div class="pill-row" id="home-horas"></div></div>
+    <div class="section" style="margin-top:14px"><div class="section-title">Próximos días</div><div class="pill-row" id="home-dias-resumen"></div></div>
+    <div class="section" style="margin-top:14px"><div class="section-title">Alertas activas</div><div id="home-alertas"></div></div>
   </div>
-  <div class="kpi-grid" id="home-kpis">
-    <div class="kpi-box skeleton-box"></div><div class="kpi-box skeleton-box"></div>
-    <div class="kpi-box skeleton-box"></div><div class="kpi-box skeleton-box"></div>
-  </div>
-  <div class="section" id="home-ropa" style="display:none"></div>
-  <div class="section" id="home-lluvia-mini" style="display:none;margin-top:10px"></div>
-  <div class="section" id="home-aire" style="display:none"></div>
-  <div class="section" id="home-polen" style="display:none"></div>
-  <div class="section"><div class="section-title">Próximas horas</div><div class="pill-row" id="home-horas"></div></div>
-  <div class="section" style="margin-top:14px"><div class="section-title">Próximos días</div><div class="pill-row" id="home-dias-resumen"></div></div>
-  <div class="section" style="margin-top:14px"><div class="section-title">Alertas activas</div><div id="home-alertas"></div></div>
 </div>
 
 <!-- PRONOSTICO -->
@@ -1484,6 +1471,12 @@ function _ajustarTamanoCanvas(){
   if(_ctxFondo.setTransform) _ctxFondo.setTransform(dpr,0,0,dpr,0,0);
   if(_ctxFrente.setTransform) _ctxFrente.setTransform(dpr,0,0,dpr,0,0);
 }
+let _resizeEscenaTimer=null;
+window.addEventListener('resize', ()=>{
+  clearTimeout(_resizeEscenaTimer);
+  _resizeEscenaTimer=setTimeout(()=>{ if(_pagActual==='home' && CLIMA_ACTUAL) aplicarEscena(); }, 250);
+});
+window.addEventListener('orientationchange', ()=>{ if(_pagActual==='home' && CLIMA_ACTUAL) setTimeout(aplicarEscena, 300); });
 function _inicializarCanvasEscena(){
   if(_canvasFondo) return;
   _canvasFondo=document.getElementById('escena-canvas-fondo');
@@ -1630,6 +1623,14 @@ function aplicarEscena(){
     sueloEl.className='escena-suelo';
     if(categoria==='nieve') sueloEl.classList.add('nevado');
     else if(c.temperature_2m<=0) sueloEl.classList.add('helado');
+  }
+
+  const personaEl=document.getElementById('escena-persona');
+  if(personaEl){
+    personaEl.className='escena-persona';
+    if(['lluvia','tormenta'].includes(categoria)) personaEl.classList.add('lluvia');
+    if(categoria==='nieve' || c.temperature_2m<=5) personaEl.classList.add('frio');
+    if((categoria==='despejado'||categoria==='parcial') && esDia && c.temperature_2m>=18) personaEl.classList.add('sol');
   }
 
   if(categoria==='tormenta') iniciarRelampagos(); else detenerRelampagos();
@@ -2865,60 +2866,5 @@ document.addEventListener('touchend', ()=>{
 }, {passive:true});
 </script>
 
-<script>
-// ═══════════════════════════════════════════════════════════════
-// IDENTIDAD FRIGURSO — traba de privacidad simple, independiente del
-// resto de la app. No cifra datos, solo tapa la vista hasta que se
-// pone la contraseña. El desbloqueo es una acción del usuario, no
-// un timer, así que si esto tarda en cargar el peor caso es que el
-// botón no responda todavía — nunca queda trabado en silencio.
-// ═══════════════════════════════════════════════════════════════
-function fgErr(id, msg){ const el = document.getElementById(id); el.textContent = msg; el.style.display = 'block'; }
-function fgHideErr(id){ document.getElementById(id).style.display = 'none'; }
-async function _hashPass(pass){
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-function fgOcultarLock(){
-  document.getElementById('fg-lock').style.display = 'none';
-  try{ sessionStorage.setItem('clima_unlocked','1'); }catch(e){}
-}
-function fgMostrarLock(){
-  try{ sessionStorage.removeItem('clima_unlocked'); }catch(e){}
-  document.getElementById('lk-pass-in').value = '';
-  fgHideErr('lk-ing-err');
-  document.getElementById('fg-lock').style.display = 'flex';
-}
-async function fgCrearAcceso(){
-  fgHideErr('lk-crear-err');
-  const p1 = document.getElementById('lk-pass').value;
-  const p2 = document.getElementById('lk-pass2').value;
-  if(!p1 || p1.length<4){ fgErr('lk-crear-err','Mínimo 4 caracteres'); return; }
-  if(p1!==p2){ fgErr('lk-crear-err','Las contraseñas no coinciden'); return; }
-  localStorage.setItem('clima_pass_hash', await _hashPass(p1));
-  fgOcultarLock();
-}
-async function fgIngresarAcceso(){
-  fgHideErr('lk-ing-err');
-  const p = document.getElementById('lk-pass-in').value;
-  if((await _hashPass(p)) === localStorage.getItem('clima_pass_hash')){
-    fgOcultarLock();
-  } else {
-    fgErr('lk-ing-err','Contraseña incorrecta');
-  }
-}
-function fgOlvideAcceso(){
-  if(!confirm('Vamos a borrar la contraseña de este celular para que puedas entrar de nuevo. Tus datos NO se borran.\n\n¿Continuar?')) return;
-  localStorage.removeItem('clima_pass_hash');
-  location.reload();
-}
-if(localStorage.getItem('clima_pass_hash')){
-  document.getElementById('lk-crear').style.display = 'none';
-  document.getElementById('lk-ingresar').style.display = 'block';
-  let yaDesbloqueado = false;
-  try{ yaDesbloqueado = sessionStorage.getItem('clima_unlocked') === '1'; }catch(e){}
-  if(yaDesbloqueado) fgOcultarLock();
-}
-</script>
 </body>
 </html>
