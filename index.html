@@ -176,9 +176,9 @@
   .escena-wrap.ventoso{animation:viento-fuerte .5s ease-in-out infinite}
 
   .escena-overlay-info{position:absolute;left:14px;bottom:calc(70px + var(--sab) + 10px);background:rgba(6,16,32,.55);backdrop-filter:blur(4px);border-radius:12px;padding:8px 12px;color:#fff}
-  .escena-btn-compartir{position:absolute;top:calc(env(safe-area-inset-top,0px) + 72px);right:14px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center}
+  .escena-btn-compartir{position:absolute;top:calc(var(--header-h,70px) + 10px);right:14px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center}
   .escena-btn-compartir:active{background:rgba(6,16,32,.8)}
-  .escena-btn-sonido{position:absolute;top:calc(env(safe-area-inset-top,0px) + 72px);left:14px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;opacity:.65}
+  .escena-btn-sonido{position:absolute;top:calc(var(--header-h,70px) + 10px);left:14px;width:36px;height:36px;border-radius:50%;background:rgba(6,16,32,.55);backdrop-filter:blur(4px);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;opacity:.65}
   .escena-btn-sonido.activo{opacity:1;background:rgba(59,158,255,.75)}
   .escena-btn-sonido:active{background:rgba(6,16,32,.8)}
   .escena-temp{font-size:26px;font-weight:900;font-family:var(--mono);line-height:1}
@@ -1471,12 +1471,20 @@ function _ajustarTamanoCanvas(){
   if(_ctxFondo.setTransform) _ctxFondo.setTransform(dpr,0,0,dpr,0,0);
   if(_ctxFrente.setTransform) _ctxFrente.setTransform(dpr,0,0,dpr,0,0);
 }
+function _ajustarAlturaHeaderEscena(){
+  const header=document.querySelector('#page-home .header');
+  if(!header) return;
+  const h=header.getBoundingClientRect().height;
+  if(h>0) document.documentElement.style.setProperty('--header-h', Math.round(h)+'px');
+}
 let _resizeEscenaTimer=null;
 window.addEventListener('resize', ()=>{
   clearTimeout(_resizeEscenaTimer);
-  _resizeEscenaTimer=setTimeout(()=>{ if(_pagActual==='home' && CLIMA_ACTUAL) aplicarEscena(); }, 250);
+  _resizeEscenaTimer=setTimeout(()=>{ _ajustarAlturaHeaderEscena(); if(_pagActual==='home' && CLIMA_ACTUAL) aplicarEscena(); }, 250);
 });
-window.addEventListener('orientationchange', ()=>{ if(_pagActual==='home' && CLIMA_ACTUAL) setTimeout(aplicarEscena, 300); });
+window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ _ajustarAlturaHeaderEscena(); if(_pagActual==='home' && CLIMA_ACTUAL) aplicarEscena(); }, 300); });
+window.addEventListener('load', _ajustarAlturaHeaderEscena);
+_ajustarAlturaHeaderEscena();
 function _inicializarCanvasEscena(){
   if(_canvasFondo) return;
   _canvasFondo=document.getElementById('escena-canvas-fondo');
@@ -1573,6 +1581,7 @@ function _esAmanecerOAtardecer(){
 }
 function aplicarEscena(){
   if(!CLIMA_ACTUAL || !CLIMA_ACTUAL.current) return;
+  _ajustarAlturaHeaderEscena();
   const cargandoEl=document.getElementById('escena-cargando');
   if(cargandoEl) cargandoEl.classList.add('oculto');
   const c=CLIMA_ACTUAL.current;
